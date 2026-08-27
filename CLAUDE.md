@@ -78,6 +78,38 @@ under `Web/Endpoints`, Razor components under `Web/Components`.
 Carry only the using directives a file actually needs. Splitting a type out of a larger file
 tends to bring along imports that belonged to its neighbours.
 
+## Tests
+
+`tests/XeonProductions.Tests` holds them all. xUnit v3 for the framework, bUnit for Blazor
+components, Moq where a collaborator genuinely needs faking.
+
+```bash
+dotnet test
+```
+
+xUnit v3 builds each test project as an executable run by Microsoft Testing Platform. VSTest
+is not supported on the .NET 10 SDK, so `global.json` opts `dotnet test` into the new runner.
+Without that file the build fails with a VSTest error rather than running anything. The
+project can also be run directly with `dotnet run --project tests/XeonProductions.Tests`.
+
+Prefer a real object to a mock. `Options.Create(...)`, `NullLogger<T>.Instance`, a real
+`MemoryCache` and `EphemeralDataProtectionProvider` all beat a fake, and most services here
+need no mocking at all. Moq is for collaborators with no usable real implementation, such as
+`SignInManager` in a component test.
+
+What belongs where:
+
+- Pure logic, no database: a plain unit test. Policy decisions, signing, slugs, limits.
+- Rendering and form binding: bUnit. A field name or a conditional block is not reachable
+  from a unit test.
+- Anything needing Postgres: not covered yet. The EF InMemory provider cannot model
+  `ILIKE`, `NULLS NOT DISTINCT` or `ExecuteUpdateAsync`, so it would assert nothing useful.
+  Use a real database when this is added.
+
+A regression test must be shown to fail without its fix. Reintroduce the bug, watch the test
+go red, then restore. A test that cannot fail is worse than no test, because it reads as
+coverage.
+
 ## Notes that are not code
 
 `NOTES.local.md` is gitignored. Use it for anything that would otherwise become a large

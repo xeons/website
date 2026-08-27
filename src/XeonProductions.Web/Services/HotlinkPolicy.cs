@@ -81,7 +81,10 @@ public static class HotlinkPolicy
         {
             var host = part;
 
-            if (Uri.TryCreate(host, UriKind.Absolute, out var uri))
+            // The scheme is required before parsing as a URI. Without it "example.com:8080"
+            // parses as scheme "example.com" with path "8080", leaving an empty host.
+            if (host.Contains("://", StringComparison.Ordinal)
+                && Uri.TryCreate(host, UriKind.Absolute, out var uri))
             {
                 host = uri.Host;
             }

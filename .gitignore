@@ -30,3 +30,9 @@ src/XeonProductions.Web/appsettings.Production.json
 
 # Caddy state
 deploy/data/
+
+# Test results and coverage output.
+TestResults/
+[Tt]est[Rr]esults/
+*.coverage
+*.trx
