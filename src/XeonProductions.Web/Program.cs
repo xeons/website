@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,14 @@ builder.Services.AddXeonInfrastructure(builder.Configuration);
 // Resolve the media root once, against the content root rather than the working directory:
 // a service run by systemd does not necessarily start in the application folder.
 builder.Services.PostConfigure<MediaOptions>(options =>
+{
+    if (!Path.IsPathRooted(options.StorageRoot))
+    {
+        options.StorageRoot = Path.Combine(builder.Environment.ContentRootPath, options.StorageRoot);
+    }
+});
+
+builder.Services.PostConfigure<DownloadOptions>(options =>
 {
     if (!Path.IsPathRooted(options.StorageRoot))
     {
@@ -79,6 +88,10 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<AdminContentService>();
 builder.Services.AddScoped<ThemeCssBuilder>();
 
+// The signer is stateless; the traffic guard holds counters shared across all requests.
+builder.Services.AddSingleton<IDownloadLinkSigner, DownloadLinkSigner>();
+builder.Services.AddSingleton<IDownloadTrafficGuard, DownloadTrafficGuard>();
+
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -107,6 +120,18 @@ builder.Services.AddRateLimiter(options =>
         limiter.Window = TimeSpan.FromMinutes(10);
         limiter.QueueLimit = 0;
     });
+
+    // Partitioned by address, so one caller cannot spend everyone's allowance. The limits on
+    // bytes transferred are separate and live in the site settings.
+    options.AddPolicy("download-gateway", http =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
 });
 
 var app = builder.Build();
@@ -148,6 +173,11 @@ app.UseStaticFiles(new StaticFileOptions
     }
 });
 
+// Downloads get a folder and no static file mount. They are served only through the download
+// endpoints; do not add UseStaticFiles for this path.
+var downloadOptions = app.Services.GetRequiredService<IOptions<DownloadOptions>>().Value;
+Directory.CreateDirectory(downloadOptions.StorageRoot);
+
 // Must precede routing: the CMS catch-all route claims every path.
 app.UseRedirectRules();
 
@@ -168,6 +198,7 @@ app.MapFeedEndpoints();
 app.MapSitemapEndpoints();
 app.MapAccountEndpoints();
 app.MapMediaEndpoints();
+app.MapDownloadEndpoints();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

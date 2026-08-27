@@ -4,6 +4,7 @@
 **/.vscode/
 **/node_modules/
 **/media/
+**/downloads/
 .git/
 .env
 *.user

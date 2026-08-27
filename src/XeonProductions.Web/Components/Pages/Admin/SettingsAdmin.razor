@@ -268,6 +268,89 @@
                 </div>
 
                 <div class="admin-card">
+                    <h2>Downloads</h2>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="s-downloads" @bind="_settings.DownloadsEnabled" />
+                        <label for="s-downloads">Serve downloads</label>
+                    </div>
+                    <span class="field-hint">
+                        Turning this off makes every download link 404 at once, without
+                        unpublishing them one at a time.
+                    </span>
+
+                    <div class="field">
+                        <label for="s-protection">Hotlink protection</label>
+                        <select id="s-protection" @bind="_settings.DownloadProtection">
+                            <option value="@HotlinkProtection.Off">Off</option>
+                            <option value="@HotlinkProtection.Lenient">
+                                Block links from other sites
+                            </option>
+                            <option value="@HotlinkProtection.Strict">
+                                Require a link from this site
+                            </option>
+                        </select>
+                        <span class="field-hint">
+                            The default for every download; individual files can override it.
+                            <strong>Block links from other sites</strong> refuses a request that
+                            names somewhere else as its source and allows one that names nothing,
+                            which stops embedding without turning away visitors whose browser
+                            suppresses the header. <strong>Require a link from this site</strong>
+                            also refuses a bare pasted address, and will turn some legitimate
+                            visitors away.
+                        </span>
+                    </div>
+
+                    <div class="field">
+                        <label for="s-referrers">Other sites allowed to link to downloads</label>
+                        <input id="s-referrers" @bind="_settings.DownloadAllowedReferrers"
+                               placeholder="example.com, partner.example.org" />
+                        <span class="field-hint">
+                            This site is always allowed, subdomains included. Only needed for a
+                            second domain.
+                        </span>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="s-lifetime">Transfer link lifetime, minutes</label>
+                            <input id="s-lifetime" type="number" min="1" max="1440"
+                                   @bind="_settings.DownloadLinkLifetimeMinutes" />
+                            <span class="field-hint">
+                                How long a copied transfer address is worth anything. Checked
+                                when a transfer starts, so it does not cut off a slow download.
+                            </span>
+                        </div>
+
+                        <div class="field">
+                            <label for="s-perhour">Transfers per address per hour</label>
+                            <input id="s-perhour" type="number" min="0" max="10000"
+                                   @bind="_settings.DownloadsPerIpPerHour" />
+                            <span class="field-hint">0 removes the limit.</span>
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="s-concurrent">Simultaneous transfers per address</label>
+                            <input id="s-concurrent" type="number" min="0" max="64"
+                                   @bind="_settings.MaxConcurrentDownloadsPerIp" />
+                            <span class="field-hint">
+                                Answers the download manager that opens a dozen sockets at
+                                one file. 0 removes the limit.
+                            </span>
+                        </div>
+
+                        <div class="field">
+                            <label for="s-throttle">Speed limit per transfer, KB/s</label>
+                            <input id="s-throttle" type="number" min="0" max="1000000"
+                                   @bind="_settings.DownloadThrottleKbps" />
+                            <span class="field-hint">0 is unlimited.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-card">
                     <h2>Contact</h2>
 
                     <div class="field">

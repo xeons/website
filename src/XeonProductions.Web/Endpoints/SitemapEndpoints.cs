@@ -99,6 +99,8 @@ public static class SitemapEndpoints
         {
             sb.AppendLine("Disallow: /admin");
             sb.AppendLine("Disallow: /search");
+
+            sb.AppendLine("Disallow: /download/");
             sb.AppendLine();
             sb.AppendLine($"Sitemap: {baseUrl}/sitemap.xml");
         }

@@ -460,6 +460,45 @@ public class AdminContentService(
         navigation.Invalidate();
     }
 
+    // --- Downloads ---
+
+    /// <summary>
+    /// Saves the metadata around a stored file. The file itself is replaced through the
+    /// upload endpoint, not here.
+    /// </summary>
+    public async Task<Download> SaveDownloadAsync(Download edited, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        var item = await db.Downloads.FirstAsync(d => d.Id == edited.Id, ct);
+
+        item.Title = edited.Title.Trim();
+        item.Description = Trim(edited.Description);
+        item.Version = Trim(edited.Version);
+        item.IsPublished = edited.IsPublished;
+        item.RequiresAuthentication = edited.RequiresAuthentication;
+        item.ProtectionOverride = edited.ProtectionOverride;
+        item.AllowedReferrers = Trim(edited.AllowedReferrers);
+
+        // Reaches a Content-Disposition header, so it is cleaned the same way an uploaded
+        // name is.
+        if (!string.IsNullOrWhiteSpace(edited.FileName))
+        {
+            item.FileName = DownloadService.SafeFileName(edited.FileName);
+        }
+
+        var baseSlug = SlugHelper.Slugify(
+            string.IsNullOrWhiteSpace(edited.Slug) ? item.Title : edited.Slug);
+
+        item.Slug = await SlugHelper.MakeUniqueAsync(baseSlug, async candidate =>
+            await db.Downloads.AnyAsync(d => d.Slug == candidate && d.Id != item.Id, ct));
+
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        return item;
+    }
+
     // --- Redirects ---
 
     public async Task SaveRedirectAsync(Redirect edited, CancellationToken ct = default)

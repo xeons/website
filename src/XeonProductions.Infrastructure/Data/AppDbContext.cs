@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<MediaItem> Media => Set<MediaItem>();
+    public DbSet<Download> Downloads => Set<Download>();
     public DbSet<Menu> Menus => Set<Menu>();
     public DbSet<MenuItem> MenuItems => Set<MenuItem>();
     public DbSet<Widget> Widgets => Set<Widget>();
@@ -135,6 +136,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.Property(x => x.SourceUrl).HasMaxLength(1000);
             e.HasIndex(x => x.RelativePath).IsUnique();
             e.HasIndex(x => x.SourceUrl);
+            e.HasOne(x => x.UploadedBy)
+                .WithMany()
+                .HasForeignKey(x => x.UploadedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<Download>(e =>
+        {
+            e.ToTable("downloads");
+            e.Property(x => x.Title).HasMaxLength(300).IsRequired();
+            e.Property(x => x.Slug).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(2000);
+            e.Property(x => x.Version).HasMaxLength(60);
+            e.Property(x => x.FileName).HasMaxLength(300);
+            e.Property(x => x.RelativePath).HasMaxLength(500);
+            e.Property(x => x.ContentType).HasMaxLength(150);
+            e.Property(x => x.Sha256).HasMaxLength(64);
+            e.Property(x => x.AllowedReferrers).HasMaxLength(1000);
+
+            e.HasIndex(x => x.Slug).IsUnique();
+
             e.HasOne(x => x.UploadedBy)
                 .WithMany()
                 .HasForeignKey(x => x.UploadedById)

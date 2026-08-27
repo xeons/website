@@ -38,6 +38,8 @@ services:
       Hosting__UseHttpsRedirection: "false"
 
       Media__StorageRoot: /app/media
+      Downloads__StorageRoot: /app/downloads
+      Downloads__MaxFileSizeBytes: ${DOWNLOAD_MAX_BYTES:-2147483648}
       DataProtection__KeysPath: /app/keys
 
       Smtp__Enabled: ${SMTP_ENABLED:-false}
@@ -54,6 +56,7 @@ services:
       Seed__AdminDisplayName: ${ADMIN_NAME:-Brandon}
     volumes:
       - media-data:/app/media
+      - downloads-data:/app/downloads
       - keys-data:/app/keys
     networks:
       - internal
@@ -80,6 +83,7 @@ services:
 volumes:
   db-data:
   media-data:
+  downloads-data:
   keys-data:
   caddy-data:
   caddy-config:

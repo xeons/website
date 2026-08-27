@@ -45,10 +45,12 @@ RUN apt-get update \
 
 COPY --from=build /app/publish .
 
-# Uploads and the data protection key ring live on volumes, so a rebuild takes neither
-# the media nor everyone's session with it.
-RUN mkdir -p /app/media /app/keys && chown -R app:app /app/media /app/keys
-VOLUME ["/app/media", "/app/keys"]
+# Uploads, downloads and the data protection key ring live on volumes, so a rebuild takes
+# neither the files nor everyone's session with it. Downloads get a volume of their own,
+# outside the media root, because they are never served as static files.
+RUN mkdir -p /app/media /app/downloads /app/keys \
+    && chown -R app:app /app/media /app/downloads /app/keys
+VOLUME ["/app/media", "/app/downloads", "/app/keys"]
 
 USER app
 

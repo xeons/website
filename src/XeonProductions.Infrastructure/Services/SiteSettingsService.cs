@@ -87,6 +87,34 @@ public class SiteSettings
     /// </summary>
     public BlogContentDisplay BlogContentDisplay { get; set; } = BlogContentDisplay.FullContent;
 
+    // --- Downloads ---
+    /// <summary>Turns every download link off at once, without unpublishing them one by one.</summary>
+    public bool DownloadsEnabled { get; set; } = true;
+
+    /// <summary>Site-wide default. An individual download may override it.</summary>
+    public HotlinkProtection DownloadProtection { get; set; } = HotlinkProtection.Lenient;
+
+    /// <summary>
+    /// Referrer hosts allowed in addition to the site's own, comma separated. The host the
+    /// request arrived on is always allowed, so this is only for a second domain.
+    /// </summary>
+    public string? DownloadAllowedReferrers { get; set; }
+
+    /// <summary>
+    /// How long a signed transfer link stays valid. Checked when a transfer starts, not
+    /// during it, so a slow download is not cut off.
+    /// </summary>
+    public int DownloadLinkLifetimeMinutes { get; set; } = 30;
+
+    /// <summary>Transfers one address may start in an hour. 0 disables the limit.</summary>
+    public int DownloadsPerIpPerHour { get; set; } = 60;
+
+    /// <summary>Simultaneous transfers per address. 0 disables the limit.</summary>
+    public int MaxConcurrentDownloadsPerIp { get; set; } = 3;
+
+    /// <summary>Per-transfer ceiling in KB/s. 0 is unlimited.</summary>
+    public int DownloadThrottleKbps { get; set; }
+
     // --- SEO / integrations ---
     public string? SeoTitleSuffix { get; set; }
     public string? DefaultMetaDescription { get; set; }

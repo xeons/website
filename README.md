@@ -158,6 +158,7 @@ Everything at `/admin`, behind cookie authentication with two roles: `Administra
 | Editing | Rich text editor with an HTML view behind a toggle. See below. |
 | Pages | Hierarchical list, editor with parent, menu order and four templates (default, full width, narrow, landing). |
 | Media | Upload with drag-and-drop, automatic downscaling and WebP thumbnails, alt text and captions. |
+| Downloads | Binaries served through a protected link rather than a static path. See below. |
 | Categories, Tags | Create, rename, re-slug, delete. Tags can be pruned of orphans in bulk. |
 | Comments | Moderation queue: approve, mark spam, delete. |
 | Messages | Contact form submissions, with archive and spam views. |
@@ -241,6 +242,123 @@ Two settings worth calling out:
   read-more link* restores the summary listing.
 - **Site timezone** drives permalinks and displayed dates, as described above.
 
+## Downloads
+
+Archives, installers and anything else binary live under **Downloads** in the admin. There is
+no public downloads index and no listing page: a download is linked by hand from whatever post
+or page it belongs to, using the address the admin screen hands you.
+
+Uploads go straight from the browser to `/admin/api/downloads/upload` over an ordinary
+multipart POST, not over the Blazor circuit. `InputFile` frames its bytes through SignalR and
+buffers them server-side, which is fine for a screenshot and hopeless for a two gigabyte
+archive; posting to an endpoint lets Kestrel stream it to disk while a SHA-256 is computed on
+the way past. The 25 MB ceiling on media does not apply here. `Downloads:MaxFileSizeBytes`
+does, it defaults to 2 GB, and it is enforced against the bytes that actually arrive rather
+than against the length the client claimed.
+
+### Why a download is not a media item
+
+Media is written into a folder that is mounted as static files and served straight off disk.
+That is exactly right for an image in a post and exactly wrong for a release archive: a static
+path can be linked from anywhere, cached by anyone, cannot be counted, and cannot be withdrawn
+without deleting the file.
+
+So downloads have no static path at all. The storage root is not mounted, it is not inside the
+media root, and every byte leaves through an endpoint. Everything below follows from that.
+
+### The two hops
+
+A download is served in two steps, and the split is the whole design.
+
+`/download/{slug}` is the **stable, permanent** address. It is what you paste into a post and
+it never returns a byte of the file. It decides whether the request deserves the file and, if
+so, issues a signed ticket. Because it is a decision rather than a payload, an `<img>` or an
+`<a>` on someone else's site pointed at it gets a 403 rather than your bandwidth.
+
+`/download/file/{token}` is the **transfer**, and it is the opposite kind of URL: unguessable,
+expiring, and tied to the client that asked for it. The token is signed with the application's
+data protection key ring - the one already persisted to a volume for auth cookies, so tickets
+survive a redeploy - and carries the address and user agent it was issued to. Copying the
+resolved address out of the browser and posting it somewhere yields a link that dies within the
+hour and was never going to work for anyone else. Nothing about it is worth sharing, which is
+what makes it safe to let it carry the file.
+
+The two routes cannot collide: one is two segments and the other is three, so a download
+slugged `file` is still reachable and still unambiguous.
+
+### What the referrer check actually checks
+
+Two headers carry the answer and they fail in opposite directions.
+
+`Referer` is the old one and is widely suppressed - a strict referrer policy, a privacy
+extension or an HTTPS-to-HTTP hop all send nothing, so its absence proves nothing at all.
+
+`Sec-Fetch-Site` is the newer one and is much the better signal. The browser computes it, a
+page cannot suppress it with a referrer policy, and it distinguishes the case this feature
+exists for, a request initiated by another site, from a visitor opening a bookmark. It is
+preferred wherever it is present, with `Referer` as the fallback for older clients.
+
+That gives three verdicts, and the setting decides what to do with them:
+
+| Setting | Linked from elsewhere | No referrer at all |
+| --- | --- | --- |
+| Off | allowed | allowed |
+| Block links from other sites *(default)* | **403** | allowed |
+| Require a link from this site | **403** | **403** |
+
+The default is deliberate. Refusing a request that names another site stops embedding, which
+is the thing worth stopping; refusing one that names nothing would turn away real visitors
+whose browser is simply not telling you, and would buy very little, because the transfer link
+those requests receive is private and short-lived regardless. The strict setting is there when
+a bare address pasted into a chat window is also unwanted, and it will cost you some
+legitimate traffic.
+
+Individual downloads override the site default, and either level can name extra hosts that are
+allowed to link straight at a file. Subdomains of an allowed host count as allowed, so naming
+`example.com` does not then turn away `www.example.com`.
+
+### Limits on the bytes themselves
+
+Referrer checks answer embedding. They do nothing about the person who simply takes everything,
+so there are three more knobs in **Settings -> Downloads**:
+
+- **Transfers per address per hour** answers the script that walks every link on the site.
+- **Simultaneous transfers per address** answers the download manager that opens a dozen
+  sockets at one file and takes the whole upstream with it. These are genuinely different
+  attacks and neither limit expresses the other.
+- **Speed limit per transfer** caps throughput. It holds a long-run average rather than
+  policing each chunk, so a transfer that fell behind is allowed to catch up.
+
+IPv6 clients are counted per `/64`, not per address. Handing out a fresh address from your own
+prefix is otherwise the cheapest way there is to walk straight through a per-address limit.
+
+The counters are in memory. They are worthless after a restart and a database write per
+transfer would be a strange thing to ask of Postgres for a personal site. On more than one
+instance each keeps its own counts, so the effective limit is the configured one times the
+instance count.
+
+### Smaller things that matter
+
+- Everything is served as `application/octet-stream` with `Content-Disposition: attachment`,
+  whatever was uploaded. Serving a stored file under its own declared type would let an
+  uploaded `.html` or `.svg` execute inside this origin.
+- `Cache-Control: private, no-store` on both hops. A shared cache holding either the redirect
+  or the file would hand both to whoever asked next, which is the leech being prevented.
+- Range requests are supported, so a large download resumes. The token is checked when a
+  transfer starts, not during it, so the lifetime bounds how long a copied link is worth
+  something rather than how long a slow download may take.
+- Caddy is told not to compress `/download/*`. Beyond wasting CPU on an already-compressed
+  archive, a compressed response cannot serve a byte range, which would quietly take resumable
+  downloads away.
+- `/download/` is disallowed in `robots.txt`. A crawler following those links would spend the
+  bandwidth all of this exists to conserve.
+- Stored paths carry a random component, so the layout stays unguessable even if the folder
+  were ever exposed by a misconfigured proxy.
+- Replacing a file keeps the address, the title and the transfer count. Changing the **slug**
+  does break links already published, so the editor says so; add a redirect if you must.
+- The blocked, expired and missing responses are small self-contained pages that link the site
+  stylesheet, so they follow the theme without a layout to render into.
+
 ## Testing on a machine with Docker
 
 `docker-compose.dev.yml` brings up the app and the database with no proxy in front, which is
@@ -283,12 +401,14 @@ docker compose run --rm \
 
 ### Backups
 
-Two things need backing up: the database and the media volume.
+Three things need backing up: the database, the media volume and the downloads volume.
 
 ```bash
 docker compose exec -T db pg_dump -U xeon xeon | gzip > xeon-$(date +%F).sql.gz
 docker run --rm -v newwebsite_media-data:/media -v "$PWD":/backup alpine \
   tar czf /backup/media-$(date +%F).tar.gz -C /media .
+docker run --rm -v newwebsite_downloads-data:/downloads -v "$PWD":/backup alpine \
+  tar czf /backup/downloads-$(date +%F).tar.gz -C /downloads .
 ```
 
 ## Security notes
@@ -304,6 +424,11 @@ docker run --rm -v newwebsite_media-data:/media -v "$PWD":/backup alpine \
 - Failed sign-ins lock the account for fifteen minutes after five attempts, and the error
   message does not reveal whether the address exists.
 - The `returnUrl` on the login form only accepts site-relative paths.
+- Downloads are never served from a static path. The stable link issues a signed, expiring,
+  client-bound ticket and the transfer happens on that; see the Downloads section above.
+- The download upload endpoint validates its antiforgery token by hand rather than through the
+  middleware. The middleware falls back to reading the token out of the form body, and doing
+  that to a multipart request means buffering the whole upload before the first check runs.
 
 ## Things worth knowing
 

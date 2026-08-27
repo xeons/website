@@ -2,7 +2,10 @@
 # SITE_DOMAIN comes from the compose environment.
 
 {$SITE_DOMAIN} {
-	encode zstd gzip
+	# Downloads are excluded: a compressed response cannot serve a byte range, which
+	# resumable downloads depend on.
+	@compressible not path /download/*
+	encode @compressible zstd gzip
 
 	# Blazor's server runtime keeps a websocket open; Caddy proxies it without extra config.
 	reverse_proxy app:8080 {

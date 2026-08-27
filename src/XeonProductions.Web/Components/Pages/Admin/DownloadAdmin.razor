@@ -1,0 +1,233 @@
+@page "/admin/downloads"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IDownloadService Downloads
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Downloads</PageTitle>
+
+<AdminShell Title="Downloads"
+            Subtitle="@($"{_total} files, {DownloadService.FormatSize(_totalBytes)} stored, {_totalHits} transfers")">
+    <ChildContent>
+        <div class="notice">
+            A download is linked by its own address, <code>/download/slug</code>, which you can
+            paste into any post or page. The file itself is never served from a public path:
+            that link checks the request and then issues a private, expiring one for the
+            transfer, so it cannot be embedded on another site or handed around.
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="notice notice-error" role="alert">@_error</div>
+        }
+
+        @if (_message is not null)
+        {
+            <div class="notice notice-success" role="status">@_message</div>
+        }
+
+        <div class="admin-card">
+            <h2>Add a download</h2>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="dl-title">Title</label>
+                    <input id="dl-title" @bind="_newTitle" placeholder="Leave blank to use the file name" />
+                    <span class="field-hint">The link address is made from this and can be changed after.</span>
+                </div>
+
+                <div class="field">
+                    <label for="dl-file">File</label>
+                    <input type="file" id="dl-file" disabled="@_uploading" />
+                    <span class="field-hint">Any binary: zip, installer, archive. Up to 2 GB.</span>
+                </div>
+            </div>
+
+            <progress id="dl-progress" class="upload-progress" hidden></progress>
+            <div id="dl-status" class="row-sub upload-status"></div>
+
+            <button class="btn" @onclick="UploadAsync" disabled="@_uploading">
+                @(_uploading ? "Uploading..." : "Upload")
+            </button>
+        </div>
+
+        <div class="admin-card">
+            <div class="field">
+                <label for="dl-search">Search</label>
+                <input id="dl-search" @bind="_search" @bind:event="oninput" placeholder="Title or file name" />
+            </div>
+        </div>
+
+        @if (Filtered.Count == 0)
+        {
+            <div class="empty-state">
+                @(_items.Count == 0 ? "Nothing uploaded yet." : "No downloads match that search.")
+            </div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Link</th>
+                            <th>Size</th>
+                            <th>Transfers</th>
+                            <th class="col-actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Filtered)
+                        {
+                            <tr>
+                                <td class="row-title">
+                                    @item.Title
+                                    @if (!item.IsPublished)
+                                    {
+                                        <span class="badge badge-draft">unpublished</span>
+                                    }
+                                    @if (item.RequiresAuthentication)
+                                    {
+                                        <span class="badge">sign-in</span>
+                                    }
+                                    <div class="row-sub">@item.FileName</div>
+                                </td>
+                                <td class="row-sub">
+                                    <code>@Downloads.PublicUrl(item)</code>
+                                    <div>
+                                        <button class="btn btn-secondary btn-sm"
+                                                @onclick="() => CopyAsync(Downloads.PublicUrl(item))">
+                                            Copy link
+                                        </button>
+                                    </div>
+                                </td>
+                                <td class="row-sub">@DownloadService.FormatSize(item.SizeBytes)</td>
+                                <td class="row-sub">
+                                    @item.DownloadCount
+                                    @if (item.BlockedCount > 0)
+                                    {
+                                        <div title="Requests turned away by the referrer check">
+                                            @item.BlockedCount blocked
+                                        </div>
+                                    }
+                                    @if (item.LastDownloadedAt is not null)
+                                    {
+                                        <div>last @item.LastDownloadedAt.Value.ToLocalTime().ToString("d MMM yyyy")</div>
+                                    }
+                                </td>
+                                <td class="col-actions">
+                                    <a class="btn btn-secondary btn-sm" href="@($"/admin/downloads/{item.Id}")">Edit</a>
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => DeleteAsync(item)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private List<Download> _items = [];
+    private string _search = string.Empty;
+    private string? _newTitle;
+    private bool _uploading;
+    private string? _error;
+    private string? _message;
+
+    private int _total;
+    private long _totalBytes;
+    private long _totalHits;
+
+    private List<Download> Filtered =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _items
+            : _items.Where(d =>
+                  d.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                  || d.FileName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                  || d.Slug.Contains(_search, StringComparison.OrdinalIgnoreCase))
+              .ToList();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _items = await db.Downloads.AsNoTracking()
+            .OrderByDescending(d => d.UpdatedAt)
+            .ToListAsync();
+
+        _total = _items.Count;
+        _totalBytes = _items.Sum(d => d.SizeBytes);
+        _totalHits = _items.Sum(d => d.DownloadCount);
+    }
+
+    private async Task UploadAsync()
+    {
+        _error = null;
+        _message = null;
+        _uploading = true;
+
+        try
+        {
+            // The browser posts the file directly to the upload endpoint; this only receives
+            // the outcome.
+            var result = await JS.InvokeAsync<UploadResult>(
+                "xeonUploadDownload", "dl-file", "dl-progress", "dl-status", _newTitle, null);
+
+            if (!result.Ok)
+            {
+                _error = result.Message ?? "The upload failed.";
+                return;
+            }
+
+            _newTitle = null;
+            _message = $"Stored. The link is {result.Url}";
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private async Task DeleteAsync(Download item)
+    {
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete \"{item.Title}\"? Any link to /download/{item.Slug} will stop working.");
+
+        if (!confirmed) return;
+
+        await Downloads.DeleteAsync(item.Id);
+        _message = $"Deleted {item.Title}.";
+
+        await LoadAsync();
+    }
+
+    private async Task CopyAsync(string path)
+    {
+        var absolute = Nav.ToAbsoluteUri(path).ToString();
+
+        if (await JS.InvokeAsync<bool>("xeonCopyText", absolute))
+        {
+            _message = $"Copied {absolute}";
+        }
+    }
+
+    /// <summary>Mirrors what the uploader resolves with; property names arrive camel cased.</summary>
+    private sealed record UploadResult(
+        bool Ok, int Id, string? Slug, string? Url, long Size, string? Message);
+}

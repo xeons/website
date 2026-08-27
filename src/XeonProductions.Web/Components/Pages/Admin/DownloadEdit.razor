@@ -1,0 +1,368 @@
+@page "/admin/downloads/{Id:int}"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IDownloadService Downloads
+@inject ISiteSettingsService SettingsService
+@inject AdminContentService Admin
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(_item?.Title ?? "Download")</PageTitle>
+
+<AdminShell Title="@(_item?.Title ?? "Download")" Subtitle="@_item?.FileName">
+    <Actions>
+        <a class="btn btn-secondary" href="/admin/downloads">Back</a>
+        <button class="btn" @onclick="SaveAsync" disabled="@(_saving || _item is null)">
+            @(_saving ? "Saving..." : "Save changes")
+        </button>
+    </Actions>
+
+    <ChildContent>
+        @if (_item is null)
+        {
+            <div class="empty-state">That download no longer exists.</div>
+        }
+        else
+        {
+            @if (_error is not null)
+            {
+                <div class="notice notice-error" role="alert">@_error</div>
+            }
+
+            @if (_message is not null)
+            {
+                <div class="notice notice-success" role="status">@_message</div>
+            }
+
+            <div class="editor-grid">
+                <div class="editor-main">
+                    <div class="admin-card">
+                        <h2>Details</h2>
+
+                        <div class="field">
+                            <label for="d-title">Title</label>
+                            <input id="d-title" @bind="_item.Title" />
+                        </div>
+
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="d-slug">Link address</label>
+                                <input id="d-slug" @bind="_item.Slug" />
+                                <span class="field-hint">
+                                    Changing this breaks every link already published to the
+                                    old address. Add a redirect if you have to change it.
+                                </span>
+                            </div>
+
+                            <div class="field">
+                                <label for="d-version">Version</label>
+                                <input id="d-version" @bind="_item.Version" placeholder="1.4.2" />
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label for="d-filename">File name offered to the browser</label>
+                            <input id="d-filename" @bind="_item.FileName" />
+                            <span class="field-hint">
+                                What the file is saved as. Independent of where it is stored.
+                            </span>
+                        </div>
+
+                        <div class="field">
+                            <label for="d-description">Notes</label>
+                            <textarea id="d-description" class="short" rows="3"
+                                      @bind="_item.Description"></textarea>
+                            <span class="field-hint">For your own reference. Not shown publicly.</span>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <h2>The link</h2>
+
+                        <div class="field">
+                            <label for="d-url">Address to link to</label>
+                            <input id="d-url" readonly value="@AbsoluteUrl" />
+                            <span class="field-hint">
+                                Paste this into a post or page. It stays valid when the file
+                                behind it is replaced.
+                            </span>
+                        </div>
+
+                        <div class="field">
+                            <label for="d-snippet">Ready-made link</label>
+                            <input id="d-snippet" readonly value="@Snippet" />
+                            <span class="field-hint">
+                                Drop this into the HTML view of the editor.
+                            </span>
+                        </div>
+
+                        <button class="btn btn-secondary" @onclick="() => CopyAsync(AbsoluteUrl)">
+                            Copy address
+                        </button>
+                        <button class="btn btn-secondary" @onclick="() => CopyAsync(Snippet)">
+                            Copy link HTML
+                        </button>
+                    </div>
+
+                    <div class="admin-card">
+                        <h2>Replace the file</h2>
+
+                        <p class="row-sub">
+                            The address, the title and the transfer count all stay as they are.
+                            Only the bytes change, and the old file is removed once the new one
+                            is safely stored.
+                        </p>
+
+                        <div class="field">
+                            <label for="d-file">New file</label>
+                            <input type="file" id="d-file" disabled="@_uploading" />
+                        </div>
+
+                        <progress id="d-progress" class="upload-progress" hidden></progress>
+                        <div id="d-status" class="row-sub upload-status"></div>
+
+                        <button class="btn btn-secondary" @onclick="ReplaceAsync" disabled="@_uploading">
+                            @(_uploading ? "Uploading..." : "Replace file")
+                        </button>
+                    </div>
+                </div>
+
+                <div class="editor-side">
+                    <div class="admin-card">
+                        <h2>Availability</h2>
+
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="d-published" @bind="_item.IsPublished" />
+                            <label for="d-published">Published</label>
+                        </div>
+
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="d-auth" @bind="_item.RequiresAuthentication" />
+                            <label for="d-auth">Signed-in accounts only</label>
+                        </div>
+
+                        <span class="field-hint">
+                            Unpublishing returns a 404 without deleting anything.
+                        </span>
+                    </div>
+
+                    <div class="admin-card">
+                        <h2>Hotlink protection</h2>
+
+                        <div class="field">
+                            <label for="d-protection">For this file</label>
+                            <select id="d-protection" value="@ProtectionValue" @onchange="ProtectionChanged">
+                                <option value="">Follow the site setting (@_siteProtection)</option>
+                                <option value="@nameof(HotlinkProtection.Off)">Off</option>
+                                <option value="@nameof(HotlinkProtection.Lenient)">
+                                    Block links from other sites
+                                </option>
+                                <option value="@nameof(HotlinkProtection.Strict)">
+                                    Require a link from this site
+                                </option>
+                            </select>
+                            <span class="field-hint">
+                                @ProtectionHint
+                            </span>
+                        </div>
+
+                        <div class="field">
+                            <label for="d-referrers">Other sites allowed to link here</label>
+                            <textarea id="d-referrers" class="short" rows="3"
+                                      @bind="_item.AllowedReferrers"
+                                      placeholder="partner.example.com"></textarea>
+                            <span class="field-hint">
+                                One host per line, in addition to the site-wide list.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <h2>The file</h2>
+
+                        <p class="row-sub">
+                            @DownloadService.FormatSize(_item.SizeBytes)<br />
+                            @_item.ContentType<br />
+                            Uploaded @_item.CreatedAt.ToLocalTime().ToString("d MMM yyyy")
+                        </p>
+
+                        @if (_item.Sha256 is not null)
+                        {
+                            <div class="field">
+                                <label for="d-sha">SHA-256</label>
+                                <input id="d-sha" readonly value="@_item.Sha256" />
+                            </div>
+                        }
+
+                        <p class="row-sub">
+                            @_item.DownloadCount transfers, @_item.BlockedCount blocked
+                        </p>
+                    </div>
+
+                    <div class="admin-card">
+                        <h2>Delete</h2>
+                        <button class="btn btn-danger" @onclick="DeleteAsync">Delete this download</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Download? _item;
+    private HotlinkProtection _siteProtection = HotlinkProtection.Lenient;
+    private bool _saving;
+    private bool _uploading;
+    private string? _error;
+    private string? _message;
+
+    private string AbsoluteUrl =>
+        _item is null ? string.Empty : Nav.ToAbsoluteUri(Downloads.PublicUrl(_item)).ToString();
+
+    private string Snippet =>
+        _item is null
+            ? string.Empty
+            : $"<a href=\"{Downloads.PublicUrl(_item)}\">{_item.Title} "
+              + $"({DownloadService.FormatSize(_item.SizeBytes)})</a>";
+
+    private string ProtectionValue => _item?.ProtectionOverride?.ToString() ?? string.Empty;
+
+    private string ProtectionHint => (_item?.ProtectionOverride ?? _siteProtection) switch
+    {
+        HotlinkProtection.Off =>
+            "Anyone can link straight at this file. The transfer link is still private and "
+            + "short lived, so the file cannot be embedded, only linked.",
+        HotlinkProtection.Strict =>
+            "The request has to arrive from a page on this site. A pasted address with no "
+            + "referrer is turned away as well, which some browsers will cause by design.",
+        _ =>
+            "A request that names another site is refused; one that names nothing is allowed. "
+            + "This stops embedding without punishing privacy tools."
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var settings = await SettingsService.GetAsync();
+        _siteProtection = settings.DownloadProtection;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Detached, so form edits reach the database only when the save runs.
+        _item = await db.Downloads.AsNoTracking().FirstOrDefaultAsync(d => d.Id == Id);
+    }
+
+    private void ProtectionChanged(ChangeEventArgs e)
+    {
+        if (_item is null) return;
+
+        var value = e.Value?.ToString();
+
+        _item.ProtectionOverride = string.IsNullOrEmpty(value)
+            ? null
+            : Enum.Parse<HotlinkProtection>(value);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_item is null) return;
+
+        _error = null;
+        _message = null;
+
+        if (string.IsNullOrWhiteSpace(_item.Title))
+        {
+            _error = "A title is required.";
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            var previousSlug = _item.Slug;
+            var saved = await Admin.SaveDownloadAsync(_item);
+
+            await LoadAsync();
+
+            _message = saved.Slug == previousSlug
+                ? "Saved."
+                : $"Saved. The address is now /download/{saved.Slug}.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ReplaceAsync()
+    {
+        if (_item is null) return;
+
+        _error = null;
+        _message = null;
+        _uploading = true;
+
+        try
+        {
+            var result = await JS.InvokeAsync<UploadResult>(
+                "xeonUploadDownload", "d-file", "d-progress", "d-status", null, _item.Id);
+
+            if (!result.Ok)
+            {
+                _error = result.Message ?? "The upload failed.";
+                return;
+            }
+
+            await LoadAsync();
+            _message = "The file was replaced.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_item is null) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete \"{_item.Title}\"? Any link to /download/{_item.Slug} will stop working.");
+
+        if (!confirmed) return;
+
+        await Downloads.DeleteAsync(_item.Id);
+        Nav.NavigateTo("/admin/downloads");
+    }
+
+    private async Task CopyAsync(string text)
+    {
+        if (await JS.InvokeAsync<bool>("xeonCopyText", text))
+        {
+            _message = "Copied to the clipboard.";
+        }
+    }
+
+    private sealed record UploadResult(
+        bool Ok, int Id, string? Slug, string? Url, long Size, string? Message);
+}

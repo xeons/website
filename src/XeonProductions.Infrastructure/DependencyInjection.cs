@@ -34,12 +34,14 @@ public static class DependencyInjection
         services.AddMemoryCache();
 
         services.Configure<MediaOptions>(config.GetSection("Media"));
+        services.Configure<DownloadOptions>(config.GetSection("Downloads"));
         services.Configure<SmtpOptions>(config.GetSection("Smtp"));
 
         services.AddScoped<ISiteSettingsService, SiteSettingsService>();
         services.AddScoped<IContentService, ContentService>();
         services.AddScoped<INavigationService, NavigationService>();
         services.AddScoped<IMediaService, MediaService>();
+        services.AddScoped<IDownloadService, DownloadService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IFeedReader, FeedReader>();
 

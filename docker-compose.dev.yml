@@ -45,6 +45,7 @@ services:
       Hosting__UseHttpsRedirection: "false"
 
       Media__StorageRoot: /app/media
+      Downloads__StorageRoot: /app/downloads
       DataProtection__KeysPath: /app/keys
 
       Seed__AdminEmail: ${ADMIN_EMAIL:-admin@localhost}
@@ -54,9 +55,11 @@ services:
       - "${APP_PORT:-8080}:8080"
     volumes:
       - dev-media-data:/app/media
+      - dev-downloads-data:/app/downloads
       - dev-keys-data:/app/keys
 
 volumes:
   dev-db-data:
   dev-media-data:
+  dev-downloads-data:
   dev-keys-data:
