@@ -15,8 +15,14 @@ obj/
 keys/
 src/XeonProductions.Web/keys/
 
-# Uploaded media belongs to the running site, not to the source tree.
+# Uploaded media and downloads belong to the running site, not to the source tree.
 src/XeonProductions.Web/media/
+src/XeonProductions.Web/downloads/
+
+# Working notes: design reasoning, diagnosed bugs, anything that would otherwise become a
+# large explanatory comment. Deliberately never committed.
+NOTES.local.md
+*.local.md
 
 # Any environment-specific settings written locally.
 src/XeonProductions.Web/appsettings.Production.json
