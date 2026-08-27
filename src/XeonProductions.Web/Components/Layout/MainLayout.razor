@@ -1,0 +1,21 @@
+@inherits LayoutComponentBase
+@inject ISiteSettingsService SettingsService
+
+<div class="site">
+    <a class="skip-link" href="#content">Skip to content</a>
+
+    <SiteHeader Settings="_settings" />
+
+    @Body
+
+    <SiteFooter Settings="_settings" />
+</div>
+
+@code {
+    private SiteSettings _settings = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await SettingsService.GetAsync();
+    }
+}

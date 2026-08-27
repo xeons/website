@@ -1,0 +1,119 @@
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IMediaService Media
+
+@*
+    Featured image chooser. Loads a page of recent images only when opened, so an editor with
+    no image work does not pay for the query.
+*@
+
+<div class="field">
+    <label>@Label</label>
+
+    @if (_selected is not null)
+    {
+        <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
+            <img src="@Media.ThumbnailUrl(_selected)" alt=""
+                 style="width:110px;border-radius:4px;border:1px solid var(--admin-border)" />
+            <div style="min-width:0">
+                <div class="row-title" style="word-break:break-word">@_selected.FileName</div>
+                <div class="row-sub">@_selected.Width x @_selected.Height</div>
+                <button class="btn btn-secondary btn-sm" type="button" style="margin-top:6px"
+                        @onclick="ClearAsync">Remove</button>
+            </div>
+        </div>
+    }
+
+    <button class="btn btn-secondary btn-sm" type="button" @onclick="ToggleAsync">
+        @(_open ? "Close library" : _selected is null ? "Choose image" : "Change image")
+    </button>
+
+    @if (_open)
+    {
+        <div style="margin-top:12px">
+            @if (_items.Count == 0)
+            {
+                <div class="empty-state" style="padding:24px">
+                    No images yet. Upload some from <a href="/admin/media">Media</a>.
+                </div>
+            }
+            else
+            {
+                <div class="media-grid">
+                    @foreach (var item in _items)
+                    {
+                        <button type="button"
+                                class="media-tile @(item.Id == SelectedId ? "selected" : null)"
+                                @onclick="() => SelectAsync(item)">
+                            <div class="media-thumb">
+                                <img src="@Media.ThumbnailUrl(item)" alt="@item.AltText" loading="lazy" />
+                            </div>
+                            <div class="media-meta">
+                                <span class="name">@item.FileName</span>
+                            </div>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int? SelectedId { get; set; }
+
+    [Parameter]
+    public EventCallback<int?> SelectedIdChanged { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "Featured image";
+
+    private MediaItem? _selected;
+    private List<MediaItem> _items = [];
+    private bool _open;
+    private int? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload the preview only when the bound id actually changes.
+        if (_loadedFor == SelectedId) return;
+        _loadedFor = SelectedId;
+
+        if (SelectedId is null)
+        {
+            _selected = null;
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _selected = await db.Media.AsNoTracking().FirstOrDefaultAsync(m => m.Id == SelectedId);
+    }
+
+    private async Task ToggleAsync()
+    {
+        _open = !_open;
+        if (!_open || _items.Count > 0) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _items = await db.Media.AsNoTracking()
+            .Where(m => m.ContentType.StartsWith("image/"))
+            .OrderByDescending(m => m.UploadedAt)
+            .Take(60)
+            .ToListAsync();
+    }
+
+    private async Task SelectAsync(MediaItem item)
+    {
+        _selected = item;
+        _loadedFor = item.Id;
+        _open = false;
+        await SelectedIdChanged.InvokeAsync(item.Id);
+    }
+
+    private async Task ClearAsync()
+    {
+        _selected = null;
+        _loadedFor = null;
+        await SelectedIdChanged.InvokeAsync(null);
+    }
+}

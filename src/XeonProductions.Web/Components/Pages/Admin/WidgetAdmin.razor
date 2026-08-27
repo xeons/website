@@ -1,0 +1,278 @@
+@page "/admin/widgets"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject AdminContentService Admin
+
+<PageTitle>Widgets</PageTitle>
+
+<AdminShell Title="Widgets" Subtitle="Sidebar and footer blocks">
+    <Actions>
+        <button class="btn" @onclick="NewWidget">Add widget</button>
+    </Actions>
+
+    <ChildContent>
+        @if (_editing is not null)
+        {
+            <div class="admin-card">
+                <h2>@(_editing.Id == 0 ? "New widget" : $"Edit: {_editing.Title}")</h2>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="w-title">Title</label>
+                        <input id="w-title" @bind="_editing.Title" />
+                        <span class="field-hint">Shown as the block heading. Search widgets hide it.</span>
+                    </div>
+                    <div class="field">
+                        <label for="w-type">Type</label>
+                        <select id="w-type" @bind="_editing.Type">
+                            @foreach (var type in Enum.GetValues<WidgetType>())
+                            {
+                                <option value="@type">@Describe(type)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="w-area">Area</label>
+                        <select id="w-area" @bind="_editing.Area">
+                            @foreach (var area in Enum.GetValues<WidgetArea>())
+                            {
+                                <option value="@area">@area</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="w-order">Sort order</label>
+                        <input id="w-order" type="number" @bind="_editing.SortOrder" />
+                    </div>
+                </div>
+
+                <div class="checkbox-row">
+                    <input type="checkbox" id="w-active" @bind="_editing.IsActive" />
+                    <label for="w-active">Active</label>
+                </div>
+
+                @if (_editing.Type == WidgetType.RssFeed)
+                {
+                    <div class="field">
+                        <label for="w-feed">Feed URL</label>
+                        <input id="w-feed" @bind="_editing.FeedUrl"
+                               placeholder="https://github.com/xeonproductions.atom" />
+                        <span class="field-hint">
+                            RSS or Atom. Fetched on the server and cached for 20 minutes, so
+                            the feed host sees one request regardless of traffic.
+                        </span>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="w-feeddates" @bind="_editing.ShowFeedDates" />
+                        <label for="w-feeddates">Show the date beside each item</label>
+                    </div>
+                }
+
+                @if (_editing.Type is WidgetType.RecentPosts or WidgetType.Categories
+                     or WidgetType.Tags or WidgetType.RssFeed)
+                {
+                    <div class="field">
+                        <label for="w-max">Maximum items</label>
+                        <input id="w-max" type="number" @bind="_editing.MaxItems" />
+                    </div>
+                }
+
+                @if (_editing.Type is WidgetType.Html or WidgetType.About)
+                {
+                    <div class="field">
+                        <label for="w-html">HTML</label>
+                        <textarea id="w-html" @bind="_editing.HtmlContent" rows="6"></textarea>
+                        <span class="field-hint">Sanitised on save.</span>
+                    </div>
+                }
+
+                @if (_editing.Type == WidgetType.LinkList)
+                {
+                    <h2 style="margin-top:1.4em">Links</h2>
+
+                    @foreach (var link in _editing.Links.OrderBy(l => l.SortOrder).ToList())
+                    {
+                        <div class="repeater-row">
+                            <div>
+                                <input placeholder="Label" @bind="link.Label" />
+                                <input placeholder="Note (optional)" @bind="link.Description"
+                                       style="margin-top:6px" />
+                            </div>
+                            <div>
+                                <input placeholder="https://example.com" @bind="link.Url" />
+                                <div class="checkbox-row" style="margin-top:6px;margin-bottom:0">
+                                    <input type="checkbox" id="spon-@link.GetHashCode()"
+                                           @bind="link.IsSponsored" />
+                                    <label for="spon-@link.GetHashCode()">Affiliate link</label>
+                                </div>
+                            </div>
+                            <button class="btn btn-danger btn-sm"
+                                    @onclick="() => _editing.Links.Remove(link)">Remove</button>
+                        </div>
+                    }
+
+                    <button class="btn btn-secondary btn-sm" style="margin-top:12px"
+                            @onclick="AddLink">Add link</button>
+                }
+
+                <div style="margin-top:18px">
+                    <button class="btn" @onclick="SaveAsync">Save widget</button>
+                    <button class="btn btn-secondary" @onclick="() => _editing = null">Cancel</button>
+                </div>
+            </div>
+        }
+
+        @foreach (var area in Enum.GetValues<WidgetArea>())
+        {
+            var widgets = _widgets.Where(w => w.Area == area).OrderBy(w => w.SortOrder).ToList();
+
+            <div class="admin-card">
+                <h2>@area</h2>
+
+                @if (widgets.Count == 0)
+                {
+                    <p class="row-sub">Nothing in this area.</p>
+                }
+                else
+                {
+                    <div class="table-scroll">
+                        <table class="admin-table">
+                            <tbody>
+                                @foreach (var widget in widgets)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="row-title">
+                                                @(string.IsNullOrWhiteSpace(widget.Title)
+                                                    ? "(untitled)" : widget.Title)
+                                            </div>
+                                            <div class="row-sub">
+                                                @Describe(widget.Type)
+                                                @if (widget.Type == WidgetType.LinkList)
+                                                {
+                                                    <text>, @widget.Links.Count links</text>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td style="width:120px">
+                                            @if (widget.IsActive)
+                                            {
+                                                <span class="badge badge-published">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-draft">Hidden</span>
+                                            }
+                                        </td>
+                                        <td class="col-actions">
+                                            <button class="btn btn-secondary btn-sm"
+                                                    @onclick="() => Edit(widget)">Edit</button>
+                                            <button class="btn btn-danger btn-sm"
+                                                    @onclick="() => DeleteAsync(widget.Id)">Delete</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private List<Widget> _widgets = [];
+    private Widget? _editing;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _widgets = await db.Widgets.AsNoTracking()
+            .Include(w => w.Links.OrderBy(l => l.SortOrder))
+            .OrderBy(w => w.Area).ThenBy(w => w.SortOrder)
+            .ToListAsync();
+    }
+
+    private void NewWidget() =>
+        _editing = new Widget { Area = WidgetArea.Sidebar, IsActive = true, MaxItems = 5 };
+
+    private void Edit(Widget widget)
+    {
+        // Deep copy: the form edits links in place, and cancelling must not alter the list.
+        _editing = new Widget
+        {
+            Id = widget.Id,
+            Title = widget.Title,
+            Type = widget.Type,
+            Area = widget.Area,
+            SortOrder = widget.SortOrder,
+            IsActive = widget.IsActive,
+            MaxItems = widget.MaxItems,
+            HtmlContent = widget.HtmlContent,
+            FeedUrl = widget.FeedUrl,
+            ShowFeedDates = widget.ShowFeedDates,
+            Links = widget.Links.Select(l => new WidgetLink
+            {
+                Id = l.Id,
+                Label = l.Label,
+                Url = l.Url,
+                Description = l.Description,
+                SortOrder = l.SortOrder,
+                OpenInNewTab = l.OpenInNewTab,
+                IsSponsored = l.IsSponsored
+            }).ToList()
+        };
+    }
+
+    private void AddLink()
+    {
+        if (_editing is null) return;
+
+        var next = _editing.Links.Count == 0 ? 1 : _editing.Links.Max(l => l.SortOrder) + 1;
+        _editing.Links.Add(new WidgetLink { SortOrder = next, OpenInNewTab = true });
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null) return;
+
+        // Drop rows the editor left blank rather than saving empty links.
+        _editing.Links = _editing.Links
+            .Where(l => !string.IsNullOrWhiteSpace(l.Label) && !string.IsNullOrWhiteSpace(l.Url))
+            .ToList();
+
+        await Admin.SaveWidgetAsync(_editing);
+        _editing = null;
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await Admin.DeleteWidgetAsync(id);
+        if (_editing?.Id == id) _editing = null;
+        await LoadAsync();
+    }
+
+    private static string Describe(WidgetType type) => type switch
+    {
+        WidgetType.LinkList => "Link list",
+        WidgetType.Html => "Custom HTML",
+        WidgetType.RecentPosts => "Recent posts",
+        WidgetType.Categories => "Category list",
+        WidgetType.Tags => "Tag cloud",
+        WidgetType.Search => "Search box",
+        WidgetType.About => "About block",
+        WidgetType.RssFeed => "RSS or Atom feed",
+        _ => type.ToString()
+    };
+}

@@ -1,0 +1,303 @@
+@page "/admin/users"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "AdminOnly")]
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<PageTitle>Users</PageTitle>
+
+<AdminShell Title="Users" Subtitle="@($"{_rows.Count} account{(_rows.Count == 1 ? "" : "s")}")">
+    <Actions>
+        <button class="btn" @onclick="NewUser">Add user</button>
+    </Actions>
+
+    <ChildContent>
+        @if (_message is not null)
+        {
+            <div class="notice notice-success" role="status">@_message</div>
+        }
+        @if (_error is not null)
+        {
+            <div class="notice notice-error" role="alert">@_error</div>
+        }
+
+        @if (_editing is not null)
+        {
+            <div class="admin-card">
+                <h2>@(_isNew ? "New user" : $"Edit: {_editing.Email}")</h2>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="u-email">Email</label>
+                        <input id="u-email" type="email" @bind="_editing.Email" disabled="@(!_isNew)" />
+                    </div>
+                    <div class="field">
+                        <label for="u-name">Display name</label>
+                        <input id="u-name" @bind="_editing.DisplayName" />
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="u-slug">Author slug</label>
+                        <input id="u-slug" @bind="_editing.Slug" placeholder="auto from display name" />
+                        <span class="field-hint">Used by the author archive at /author/{slug}.</span>
+                    </div>
+                    <div class="field">
+                        <label for="u-role">Role</label>
+                        <select id="u-role" @bind="_selectedRole">
+                            <option value="@Roles.Administrator">Administrator</option>
+                            <option value="@Roles.Editor">Editor</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="u-bio">Bio</label>
+                    <textarea id="u-bio" @bind="_editing.Bio" rows="3" style="min-height:auto"></textarea>
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="u-avatar">Avatar URL</label>
+                        <input id="u-avatar" @bind="_editing.AvatarUrl" />
+                    </div>
+                    <div class="field">
+                        <label for="u-website">Website</label>
+                        <input id="u-website" @bind="_editing.WebsiteUrl" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="u-password">@(_isNew ? "Password" : "New password")</label>
+                    <input id="u-password" type="password" @bind="_password"
+                           autocomplete="new-password" />
+                    <span class="field-hint">
+                        At least 12 characters.
+                        @(_isNew ? "" : "Leave blank to keep the current password.")
+                    </span>
+                </div>
+
+                <button class="btn" @onclick="SaveAsync">Save user</button>
+                <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+            </div>
+        }
+
+        <div class="table-scroll">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Posts</th>
+                        <th>Last sign-in</th>
+                        <th class="col-actions"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>
+                                <div class="row-title">@(row.User.DisplayName ?? row.User.Email)</div>
+                                <div class="row-sub">@row.User.Email</div>
+                            </td>
+                            <td class="row-sub">@row.Role</td>
+                            <td class="row-sub">@row.PostCount</td>
+                            <td class="row-sub">
+                                @(row.User.LastLoginAt?.ToLocalTime().ToString("d MMM yyyy, HH:mm") ?? "never")
+                            </td>
+                            <td class="col-actions">
+                                <button class="btn btn-secondary btn-sm"
+                                        @onclick="() => Edit(row)">Edit</button>
+                                @if (_rows.Count > 1)
+                                {
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => DeleteAsync(row.User.Id)">Delete</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private record Row(ApplicationUser User, string Role, int PostCount);
+
+    private List<Row> _rows = [];
+    private ApplicationUser? _editing;
+    private bool _isNew;
+    private string _password = string.Empty;
+    private string _selectedRole = Roles.Editor;
+    private string? _message;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var users = await db.Users.AsNoTracking().OrderBy(u => u.Email).ToListAsync();
+        var postCounts = await db.Posts.AsNoTracking()
+            .Where(p => p.AuthorId != null)
+            .GroupBy(p => p.AuthorId!)
+            .Select(g => new { AuthorId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.AuthorId, x => x.Count);
+
+        _rows = [];
+
+        foreach (var user in users)
+        {
+            var roles = await UserManager.GetRolesAsync(user);
+            _rows.Add(new Row(user, roles.FirstOrDefault() ?? "-", postCounts.GetValueOrDefault(user.Id)));
+        }
+    }
+
+    private void NewUser()
+    {
+        _editing = new ApplicationUser();
+        _isNew = true;
+        _password = string.Empty;
+        _selectedRole = Roles.Editor;
+        _message = _error = null;
+    }
+
+    private void Edit(Row row)
+    {
+        _editing = new ApplicationUser
+        {
+            Id = row.User.Id,
+            Email = row.User.Email,
+            UserName = row.User.UserName,
+            DisplayName = row.User.DisplayName,
+            Slug = row.User.Slug,
+            Bio = row.User.Bio,
+            AvatarUrl = row.User.AvatarUrl,
+            WebsiteUrl = row.User.WebsiteUrl
+        };
+
+        _isNew = false;
+        _password = string.Empty;
+        _selectedRole = row.Role == Roles.Administrator ? Roles.Administrator : Roles.Editor;
+        _message = _error = null;
+    }
+
+    private void Cancel()
+    {
+        _editing = null;
+        _password = string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null) return;
+
+        _message = _error = null;
+
+        if (string.IsNullOrWhiteSpace(_editing.Email))
+        {
+            _error = "An email address is required.";
+            return;
+        }
+
+        var slug = string.IsNullOrWhiteSpace(_editing.Slug)
+            ? SlugHelper.Slugify(_editing.DisplayName ?? _editing.Email)
+            : SlugHelper.Slugify(_editing.Slug);
+
+        if (_isNew)
+        {
+            var user = new ApplicationUser
+            {
+                UserName = _editing.Email,
+                Email = _editing.Email,
+                EmailConfirmed = true,
+                DisplayName = _editing.DisplayName,
+                Slug = slug,
+                Bio = _editing.Bio,
+                AvatarUrl = _editing.AvatarUrl,
+                WebsiteUrl = _editing.WebsiteUrl
+            };
+
+            var created = await UserManager.CreateAsync(user, _password);
+
+            if (!created.Succeeded)
+            {
+                _error = string.Join(" ", created.Errors.Select(e => e.Description));
+                return;
+            }
+
+            await UserManager.AddToRoleAsync(user, _selectedRole);
+            _message = $"Created {user.Email}.";
+        }
+        else
+        {
+            var user = await UserManager.FindByIdAsync(_editing.Id);
+            if (user is null)
+            {
+                _error = "That account no longer exists.";
+                return;
+            }
+
+            user.DisplayName = _editing.DisplayName;
+            user.Slug = slug;
+            user.Bio = _editing.Bio;
+            user.AvatarUrl = _editing.AvatarUrl;
+            user.WebsiteUrl = _editing.WebsiteUrl;
+
+            var updated = await UserManager.UpdateAsync(user);
+            if (!updated.Succeeded)
+            {
+                _error = string.Join(" ", updated.Errors.Select(e => e.Description));
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_password))
+            {
+                // Admin-initiated reset: drop the old password rather than asking for it.
+                var token = await UserManager.GeneratePasswordResetTokenAsync(user);
+                var reset = await UserManager.ResetPasswordAsync(user, token, _password);
+
+                if (!reset.Succeeded)
+                {
+                    _error = string.Join(" ", reset.Errors.Select(e => e.Description));
+                    return;
+                }
+            }
+
+            var currentRoles = await UserManager.GetRolesAsync(user);
+            if (!currentRoles.Contains(_selectedRole))
+            {
+                await UserManager.RemoveFromRolesAsync(user, currentRoles);
+                await UserManager.AddToRoleAsync(user, _selectedRole);
+            }
+
+            _message = "Saved.";
+        }
+
+        _editing = null;
+        _password = string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(string id)
+    {
+        // Never leave the site without a way in.
+        if (_rows.Count <= 1)
+        {
+            _error = "The last account cannot be removed.";
+            return;
+        }
+
+        var user = await UserManager.FindByIdAsync(id);
+        if (user is null) return;
+
+        await UserManager.DeleteAsync(user);
+        await LoadAsync();
+    }
+}

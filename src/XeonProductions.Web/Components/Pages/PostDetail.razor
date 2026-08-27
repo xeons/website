@@ -1,0 +1,168 @@
+@page "/{Year:int}/{Month:int}/{Day:int}/{Slug}"
+@inject IContentService Content
+@inject ISiteSettingsService SettingsService
+@inject IContentRenderer Renderer
+@inject IMediaService Media
+@inject NavigationManager Nav
+
+@if (_post is not null)
+{
+    <SeoHead Title="@(_post.SeoTitle ?? _post.Title)"
+             Description="@(_post.SeoDescription ?? _post.Excerpt)"
+             ImageUrl="@SocialImage"
+             NoIndex="_post.NoIndex"
+             IsArticle="true"
+             PublishedAt="_post.PublishedAt"
+             ModifiedAt="_post.UpdatedAt"
+             AuthorName="@AuthorName"
+             Canonical="@(_post.CanonicalUrl ?? Permalink)" />
+
+    <PageShell IsSinglePost="true">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <a href="/">Home</a>
+            @if (_post.Categories.FirstOrDefault() is { } category)
+            {
+                <span class="sep">/</span>
+                <a href="/category/@category.Slug">@category.Name</a>
+            }
+            <span class="sep">/</span>
+            <span>@_post.Title</span>
+        </nav>
+
+        <article class="entry">
+            <header class="entry-header">
+                <h1 class="entry-title">@_post.Title</h1>
+                <PostMeta Post="_post"
+                          DateFormat="@_settings.DateFormat"
+                          ShowReadingTime="_settings.ShowReadingTime" />
+            </header>
+
+            @if (_post.FeaturedImage is not null)
+            {
+                <figure class="entry-image">
+                    <img src="@Media.PublicUrl(_post.FeaturedImage.RelativePath)"
+                         alt="@(_post.FeaturedImage.AltText ?? string.Empty)"
+                         width="@_post.FeaturedImage.Width" height="@_post.FeaturedImage.Height" />
+                    @if (!string.IsNullOrWhiteSpace(_post.FeaturedImage.Caption))
+                    {
+                        <figcaption>@_post.FeaturedImage.Caption</figcaption>
+                    }
+                </figure>
+            }
+
+            <div class="entry-content">
+                @((MarkupString)_renderedContent)
+            </div>
+
+            <EntryTerms Post="_post" />
+
+            @if (_settings.ShowAuthorBox && _post.Author is not null
+                 && !string.IsNullOrWhiteSpace(_post.Author.Bio))
+            {
+                <div class="author-box">
+                    @if (!string.IsNullOrWhiteSpace(_post.Author.AvatarUrl))
+                    {
+                        <img src="@_post.Author.AvatarUrl" alt="" loading="lazy" />
+                    }
+                    <div>
+                        <strong>@AuthorName</strong>
+                        <p>@_post.Author.Bio</p>
+                    </div>
+                </div>
+            }
+        </article>
+
+        @if (_previous is not null || _next is not null)
+        {
+            <nav class="post-navigation" aria-label="More posts">
+                @if (_previous is not null)
+                {
+                    <a class="prev" href="@FeedEndpoints.PermalinkFor(_previous.PublishedAt, _previous.Slug)">
+                        <span class="label">&laquo; Previous</span>
+                        @_previous.Title
+                    </a>
+                }
+                else
+                {
+                    <span></span>
+                }
+
+                @if (_next is not null)
+                {
+                    <a class="next" href="@FeedEndpoints.PermalinkFor(_next.PublishedAt, _next.Slug)">
+                        <span class="label">Next &raquo;</span>
+                        @_next.Title
+                    </a>
+                }
+            </nav>
+        }
+
+        @if (_related.Count > 0)
+        {
+            <section class="entry">
+                <h2>Related reading</h2>
+                <ul>
+                    @foreach (var related in _related)
+                    {
+                        <li>
+                            <a href="@FeedEndpoints.PermalinkFor(related.PublishedAt, related.Slug)">
+                                @related.Title
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    </PageShell>
+}
+
+@code {
+    [Parameter] public int Year { get; set; }
+    [Parameter] public int Month { get; set; }
+    [Parameter] public int Day { get; set; }
+    [Parameter] public string Slug { get; set; } = string.Empty;
+
+    private Post? _post;
+    private Post? _previous;
+    private Post? _next;
+    private IReadOnlyList<Post> _related = [];
+    private SiteSettings _settings = new();
+    private string _renderedContent = string.Empty;
+
+    private string Permalink => FeedEndpoints.PermalinkFor(_post?.PublishedAt, Slug);
+
+    private string AuthorName =>
+        _post?.Author?.DisplayName ?? _post?.Author?.UserName ?? string.Empty;
+
+    private string? SocialImage =>
+        _post?.SocialImageUrl
+        ?? (_post?.FeaturedImage is not null ? Media.PublicUrl(_post.FeaturedImage.RelativePath) : null);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _post = await Content.GetPostBySlugAsync(Slug);
+
+        if (_post is null)
+        {
+            Nav.NotFound();
+            return;
+        }
+
+        // The slug is the real key. If the date in the URL drifted, send the visitor to the
+        // canonical permalink rather than serving the same post on two addresses.
+        var canonical = FeedEndpoints.PermalinkFor(_post.PublishedAt, _post.Slug);
+        var requested = $"/{Year:0000}/{Month:00}/{Day:00}/{Slug}";
+
+        if (!string.Equals(canonical, requested, StringComparison.OrdinalIgnoreCase))
+        {
+            Nav.NavigateTo(canonical, forceLoad: false, replace: true);
+            return;
+        }
+
+        _settings = await SettingsService.GetAsync();
+        _renderedContent = Renderer.Render(_post.ContentHtml);
+
+        (_previous, _next) = await Content.GetAdjacentPostsAsync(_post);
+        _related = await Content.GetRelatedPostsAsync(_post, 5);
+    }
+}

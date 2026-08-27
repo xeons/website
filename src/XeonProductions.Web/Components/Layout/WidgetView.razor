@@ -1,0 +1,182 @@
+@inject IContentService Content
+@inject IFeedReader Feeds
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+@*
+    Renders one sidebar or footer widget. Dynamic types query on demand; a type that finds
+    nothing renders nothing at all, so the sidebar never shows an empty box.
+*@
+
+@if (!_isEmpty)
+{
+    <section class="widget widget-@Widget.Type.ToString().ToLowerInvariant()">
+        @if (!string.IsNullOrWhiteSpace(Widget.Title) && Widget.Type != WidgetType.Search)
+        {
+            <h2 class="widget-title">@Widget.Title</h2>
+        }
+
+        @switch (Widget.Type)
+        {
+            case WidgetType.Search:
+                <form class="search-form" action="/search" method="get" role="search">
+                    <label class="screen-reader-text" for="widget-search-@Widget.Id">Search</label>
+                    <input type="search" id="widget-search-@Widget.Id" name="q"
+                           placeholder="Search the site..." />
+                    <button class="btn" type="submit">Go</button>
+                </form>
+                break;
+
+            case WidgetType.LinkList:
+                <ul>
+                    @foreach (var link in Widget.Links)
+                    {
+                        <li>
+                            <a href="@link.Url"
+                               target="@(link.OpenInNewTab ? "_blank" : null)"
+                               rel="@RelFor(link)">@link.Label</a>
+                            @if (!string.IsNullOrWhiteSpace(link.Description))
+                            {
+                                <span class="link-note">@link.Description</span>
+                            }
+                        </li>
+                    }
+                </ul>
+                break;
+
+            case WidgetType.RecentPosts:
+                <ul>
+                    @foreach (var post in _recentPosts)
+                    {
+                        <li>
+                            <a class="widget-post" href="@FeedEndpoints.PermalinkFor(post.PublishedAt, post.Slug)">
+                                @post.Title
+                                <span class="date">@SiteTime.ToSiteTime(post.PublishedAt)?.ToString("MMM d, yyyy")</span>
+                            </a>
+                        </li>
+                    }
+                </ul>
+                break;
+
+            case WidgetType.Categories:
+                <ul>
+                    @foreach (var (category, count) in _categories)
+                    {
+                        <li><a href="/category/@category.Slug">@category.Name</a> <span class="link-note">@count</span></li>
+                    }
+                </ul>
+                break;
+
+            case WidgetType.Tags:
+                <ul class="tag-list">
+                    @foreach (var tag in _tags)
+                    {
+                        <li><a href="/tag/@tag.Slug">@tag.Name</a></li>
+                    }
+                </ul>
+                break;
+
+            case WidgetType.RssFeed:
+                <ul>
+                    @foreach (var entry in _feedItems)
+                    {
+                        <li>
+                            @* External destination: never let the target reach window.opener. *@
+                            <a class="widget-post" href="@entry.Link"
+                               target="_blank" rel="noopener nofollow">
+                                @entry.Title
+                                @if (Widget.ShowFeedDates && entry.Published is not null)
+                                {
+                                    <span class="date">
+                                        @SiteTime.ToSiteTime(entry.Published.Value).ToString("MMM d, yyyy")
+                                    </span>
+                                }
+                            </a>
+                        </li>
+                    }
+                </ul>
+                break;
+
+            case WidgetType.Html:
+            case WidgetType.About:
+                @((MarkupString)(Widget.HtmlContent ?? string.Empty))
+                break;
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Widget Widget { get; set; } = default!;
+
+    private IReadOnlyList<Post> _recentPosts = [];
+    private List<(Category Category, int Count)> _categories = [];
+    private IReadOnlyList<Tag> _tags = [];
+    private IReadOnlyList<FeedItem> _feedItems = [];
+    private bool _isEmpty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Several widgets render side by side and each may query, so each opens its own
+        // context rather than sharing one across the sidebar.
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        switch (Widget.Type)
+        {
+            case WidgetType.RecentPosts:
+                _recentPosts = await Content.GetRecentPostsAsync(Widget.MaxItems);
+                _isEmpty = _recentPosts.Count == 0;
+                break;
+
+            case WidgetType.Categories:
+                _categories = await db.Categories.AsNoTracking()
+                    .Select(c => new
+                    {
+                        Category = c,
+                        Count = c.Posts.Count(p => p.Status == ContentStatus.Published)
+                    })
+                    .Where(x => x.Count > 0)
+                    .OrderByDescending(x => x.Count)
+                    .Take(Widget.MaxItems)
+                    .Select(x => ValueTuple.Create(x.Category, x.Count))
+                    .ToListAsync();
+                _isEmpty = _categories.Count == 0;
+                break;
+
+            case WidgetType.Tags:
+                _tags = await db.Tags.AsNoTracking()
+                    .Where(t => t.Posts.Any(p => p.Status == ContentStatus.Published))
+                    .OrderByDescending(t => t.Posts.Count)
+                    .Take(Widget.MaxItems)
+                    .ToListAsync();
+                _isEmpty = _tags.Count == 0;
+                break;
+
+            case WidgetType.RssFeed:
+                _feedItems = await Feeds.ReadAsync(Widget.FeedUrl, Widget.MaxItems);
+                // An unreachable feed hides the block rather than showing an empty box.
+                _isEmpty = _feedItems.Count == 0;
+                break;
+
+            case WidgetType.LinkList:
+                _isEmpty = Widget.Links.Count == 0;
+                break;
+
+            case WidgetType.Html:
+            case WidgetType.About:
+                _isEmpty = string.IsNullOrWhiteSpace(Widget.HtmlContent);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Affiliate links get rel="sponsored" for disclosure; every outbound link gets
+    /// noopener so the target cannot reach back through window.opener.
+    /// </summary>
+    private static string? RelFor(WidgetLink link)
+    {
+        var parts = new List<string>();
+        if (link.OpenInNewTab) parts.Add("noopener");
+        if (link.IsSponsored) { parts.Add("sponsored"); parts.Add("nofollow"); }
+        return parts.Count == 0 ? null : string.Join(' ', parts);
+    }
+}

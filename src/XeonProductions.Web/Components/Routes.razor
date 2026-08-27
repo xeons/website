@@ -1,0 +1,26 @@
+<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                @if (context.User.Identity?.IsAuthenticated is true)
+                {
+                    <LayoutView Layout="typeof(Layout.MainLayout)">
+                        <h1>Not allowed</h1>
+                        <p>Your account does not have access to this area.</p>
+                    </LayoutView>
+                }
+                else
+                {
+                    @* Static SSR: bounce through the cookie handler's login path. *@
+                    <RedirectToLogin />
+                }
+            </NotAuthorized>
+            <Authorizing>
+                <LayoutView Layout="typeof(Layout.MainLayout)">
+                    <p>Checking your session...</p>
+                </LayoutView>
+            </Authorizing>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>

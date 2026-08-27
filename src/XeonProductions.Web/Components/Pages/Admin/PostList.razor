@@ -1,0 +1,174 @@
+@page "/admin/posts"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject AdminContentService Admin
+@inject NavigationManager Nav
+
+<PageTitle>Posts</PageTitle>
+
+<AdminShell Title="Posts" Subtitle="@($"{_total} total")">
+    <Actions>
+        <a class="btn" href="/admin/posts/new">New post</a>
+    </Actions>
+
+    <ChildContent>
+        <div class="toolbar">
+            <input type="search" placeholder="Search titles..." value="@_search"
+                   @oninput="OnSearchChanged" />
+
+            <select value="@_statusFilter" @onchange="OnStatusChanged">
+                <option value="">All statuses</option>
+                @foreach (var status in Enum.GetValues<ContentStatus>())
+                {
+                    <option value="@status">@status</option>
+                }
+            </select>
+
+            <span class="spacer"></span>
+
+            @if (_deleteTarget is not null)
+            {
+                <span class="row-sub">Delete "@_deleteTarget.Title"?</span>
+                <button class="btn btn-danger btn-sm" @onclick="ConfirmDeleteAsync">Yes, delete</button>
+                <button class="btn btn-secondary btn-sm" @onclick="() => _deleteTarget = null">Cancel</button>
+            }
+        </div>
+
+        @if (_posts.Count == 0)
+        {
+            <div class="empty-state">
+                No posts match this filter.
+            </div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Categories</th>
+                            <th>Date</th>
+                            <th class="col-actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var post in _posts)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="row-title">@post.Title</div>
+                                    <div class="row-sub">/@post.Slug</div>
+                                </td>
+                                <td><StatusBadge Status="post.Status" PublishedAt="post.PublishedAt" /></td>
+                                <td class="row-sub">
+                                    @(post.Categories.Count == 0
+                                        ? "Uncategorised"
+                                        : string.Join(", ", post.Categories.Select(c => c.Name)))
+                                </td>
+                                <td class="row-sub">
+                                    @(post.PublishedAt?.ToLocalTime().ToString("d MMM yyyy") ?? "-")
+                                </td>
+                                <td class="col-actions">
+                                    <a class="btn btn-secondary btn-sm" href="/admin/posts/@post.Id">Edit</a>
+                                    @if (post.Status == ContentStatus.Published)
+                                    {
+                                        <a class="btn btn-secondary btn-sm" target="_blank" rel="noopener"
+                                           href="@FeedEndpoints.PermalinkFor(post.PublishedAt, post.Slug)">View</a>
+                                    }
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => _deleteTarget = post">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (_totalPages > 1)
+            {
+                <div class="toolbar" style="margin-top:18px">
+                    <button class="btn btn-secondary btn-sm" disabled="@(_page <= 1)"
+                            @onclick="() => GoToPageAsync(_page - 1)">Previous</button>
+                    <span class="row-sub">Page @_page of @_totalPages</span>
+                    <button class="btn btn-secondary btn-sm" disabled="@(_page >= _totalPages)"
+                            @onclick="() => GoToPageAsync(_page + 1)">Next</button>
+                </div>
+            }
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private const int PageSize = 20;
+
+    private List<Post> _posts = [];
+    private Post? _deleteTarget;
+    private string _search = string.Empty;
+    private string _statusFilter = string.Empty;
+    private int _page = 1;
+    private int _total;
+    private int _totalPages = 1;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var query = db.Posts.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            query = query.Where(p => EF.Functions.ILike(p.Title, $"%{_search.Trim()}%"));
+        }
+
+        if (Enum.TryParse<ContentStatus>(_statusFilter, out var status))
+        {
+            query = query.Where(p => p.Status == status);
+        }
+
+        _total = await query.CountAsync();
+        _totalPages = Math.Max(1, (int)Math.Ceiling(_total / (double)PageSize));
+        _page = Math.Clamp(_page, 1, _totalPages);
+
+        _posts = await query
+            .Include(p => p.Categories)
+            .OrderByDescending(p => p.PublishedAt ?? p.CreatedAt)
+            .Skip((_page - 1) * PageSize)
+            .Take(PageSize)
+            .ToListAsync();
+    }
+
+    private async Task OnSearchChanged(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnStatusChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? string.Empty;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        _page = page;
+        await LoadAsync();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null) return;
+
+        await Admin.DeletePostAsync(_deleteTarget.Id);
+        _deleteTarget = null;
+        await LoadAsync();
+    }
+}

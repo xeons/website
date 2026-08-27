@@ -1,0 +1,49 @@
+@page "/tag/{Slug}"
+@page "/tag/{Slug}/page/{PageNumber:int}"
+@inject IContentService Content
+@inject ISiteSettingsService SettingsService
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+
+@if (_tag is not null)
+{
+    <SeoHead Title="@($"#{_tag.Name}")"
+             Description="@($"Posts tagged {_tag.Name}.")"
+             NoIndex="PageNumber > 1"
+             Canonical="@CanonicalPath" />
+
+    <PageShell>
+        <ArchiveView Heading="@($"Tagged: {_tag.Name}")"
+                     Result="_result"
+                     BasePath="@($"/tag/{Slug}")" />
+    </PageShell>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+    [Parameter] public int PageNumber { get; set; } = 1;
+
+    private Tag? _tag;
+    private PagedResult<Post> _result = new([], 1, 10, 0);
+
+    private string CanonicalPath =>
+        PageNumber > 1 ? $"/tag/{Slug}/page/{PageNumber}" : $"/tag/{Slug}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            _tag = await db.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Slug == Slug);
+        }
+
+        if (_tag is null)
+        {
+            Nav.NotFound();
+            return;
+        }
+
+        var settings = await SettingsService.GetAsync();
+        _result = await Content.GetPostsByTagAsync(
+            Slug, PageNumber <= 0 ? 1 : PageNumber, settings.PostsPerPage);
+    }
+}

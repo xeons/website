@@ -1,0 +1,35 @@
+# Caddy obtains and renews the TLS certificate automatically.
+# SITE_DOMAIN comes from the compose environment.
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	# Blazor's server runtime keeps a websocket open; Caddy proxies it without extra config.
+	reverse_proxy app:8080 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-For {remote_host}
+		header_up Host {host}
+	}
+
+	# Uploaded media is immutable once written, so it can be cached hard at the edge.
+	@media path /media/*
+	header @media Cache-Control "public, max-age=31536000, immutable"
+
+	# The app never needs to be framed by anyone else.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 20MiB
+			roll_keep 5
+		}
+	}
+}
+
+# Keep the bare domain and the www host on one canonical address.
+www.{$SITE_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}

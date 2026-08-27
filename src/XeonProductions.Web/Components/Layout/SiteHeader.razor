@@ -1,0 +1,197 @@
+@inject INavigationService Navigation
+@inject IMediaService Media
+
+<header class="site-header layout-@Settings.HeaderLayout.ToString().ToLowerInvariant()">
+    <div class="inside-header grid-container">
+        <div class="site-branding">
+            @if (HasLogo)
+            {
+                <a class="site-logo @(HasDarkLogo ? "has-dark" : null)" href="/" aria-label="@Settings.SiteTitle">
+                    @*
+                        Both logos are rendered and swapped by CSS. Picking one server-side
+                        is not possible: the theme is a browser preference, and the page is
+                        cached and served identically to everyone.
+                    *@
+                    <img class="logo-light" src="@Settings.LogoUrl" alt="@Settings.SiteTitle"
+                         srcset="@_lightSrcSet" sizes="@LogoSizes"
+                         width="@_light?.Width" height="@_light?.Height"
+                         decoding="async" />
+
+                    @if (!string.IsNullOrWhiteSpace(Settings.LogoUrlDark))
+                    {
+                        <img class="logo-dark" src="@Settings.LogoUrlDark" alt="@Settings.SiteTitle"
+                             srcset="@_darkSrcSet" sizes="@LogoSizes"
+                             width="@_dark?.Width" height="@_dark?.Height"
+                             decoding="async" />
+                    }
+                </a>
+
+                @if (Settings.ShowTagline && !string.IsNullOrWhiteSpace(Settings.Tagline))
+                {
+                    <p class="site-description">@Settings.Tagline</p>
+                }
+            }
+            else
+            {
+                <div>
+                    <p class="site-title"><a href="/">@Settings.SiteTitle</a></p>
+
+                    @if (Settings.ShowTagline && !string.IsNullOrWhiteSpace(Settings.Tagline))
+                    {
+                        <p class="site-description">@Settings.Tagline</p>
+                    }
+                </div>
+            }
+        </div>
+
+    </div>
+</header>
+
+<nav class="main-navigation @(Settings.StickyHeader ? "is-sticky" : null)" aria-label="Primary">
+    <div class="inside-navigation">
+        <button class="menu-toggle" type="button"
+                data-menu-toggle aria-controls="primary-menu" aria-expanded="false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M3 6h18M3 12h18M3 18h18" />
+            </svg>
+            Menu
+        </button>
+
+        <div class="main-nav" id="primary-menu">
+            <ul>
+                @foreach (var item in _items)
+                {
+                    <li class="@(IsCurrent(item) ? "current-menu-item" : null)">
+                        <a href="@item.Url"
+                           target="@(item.OpenInNewTab ? "_blank" : null)"
+                           rel="@(item.OpenInNewTab ? "noopener" : null)"
+                           class="@item.CssClass">
+                            @item.Label
+                        </a>
+
+                        @if (item.Children.Count > 0)
+                        {
+                            <ul class="sub-menu">
+                                @foreach (var child in item.Children)
+                                {
+                                    <li class="@(IsCurrent(child) ? "current-menu-item" : null)">
+                                        <a href="@child.Url"
+                                           target="@(child.OpenInNewTab ? "_blank" : null)"
+                                           rel="@(child.OpenInNewTab ? "noopener" : null)">
+                                            @child.Label
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+
+        @*
+            Search and the theme switch live on the navigation bar rather than the masthead.
+            A banner logo is an arbitrary image, so an icon placed over it has no reliable
+            contrast; the navigation bar has a known background.
+        *@
+        <div class="menu-bar-items">
+            @if (Settings.ShowThemeToggle)
+            {
+                <ThemeToggle />
+            }
+
+            <a class="menu-bar-item" href="/search" aria-label="Search">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                </svg>
+            </a>
+        </div>
+    </div>
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public SiteSettings Settings { get; set; } = new();
+
+    [Inject]
+    private NavigationManager NavigationManager { get; set; } = default!;
+
+    private IReadOnlyList<MenuItem> _items = [];
+
+    private MediaVariants? _light;
+    private MediaVariants? _dark;
+    private string? _lightSrcSet;
+    private string? _darkSrcSet;
+
+    private bool HasLogo => !string.IsNullOrWhiteSpace(Settings.LogoUrl);
+
+    /// <summary>
+    /// Gates the CSS swap. Without this the light logo would be hidden in dark mode even
+    /// when no dark variant exists, leaving no logo at all.
+    /// </summary>
+    private bool HasDarkLogo => !string.IsNullOrWhiteSpace(Settings.LogoUrlDark);
+
+    /// <summary>
+    /// Roughly how wide the logo is drawn, so the browser can pick a candidate before
+    /// layout. Derived from the configured height and the image's own proportions.
+    /// </summary>
+    private string LogoSizes
+    {
+        get
+        {
+            var width = 400;
+
+            if (_light is { Width: > 0, Height: > 0 })
+            {
+                width = (int)Math.Round(Settings.LogoMaxHeight * (_light.Width.Value / (double)_light.Height.Value));
+            }
+
+            return $"(max-width: 768px) 60vw, {width}px";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _items = await Navigation.GetMenuAsync(MenuLocation.Primary);
+
+        _light = await Media.ResolveByUrlAsync(Settings.LogoUrl);
+        _dark = await Media.ResolveByUrlAsync(Settings.LogoUrlDark);
+
+        _lightSrcSet = BuildSrcSet(_light);
+        _darkSrcSet = BuildSrcSet(_dark);
+    }
+
+    /// <summary>
+    /// Offers the small WebP alongside the original. A logo is often uploaded at full
+    /// resolution and then drawn a few hundred pixels wide, so without this every visitor
+    /// downloads far more image than the header can use.
+    /// </summary>
+    private static string? BuildSrcSet(MediaVariants? variants)
+    {
+        if (variants?.ThumbnailUrl is null || variants.Width is not > 0) return null;
+
+        // Nothing to choose between if the original is no larger than the thumbnail.
+        if (variants.Width <= variants.ThumbnailWidth) return null;
+
+        return $"{variants.ThumbnailUrl} {variants.ThumbnailWidth}w, {variants.Url} {variants.Width}w";
+    }
+
+    private bool IsCurrent(MenuItem item)
+    {
+        if (item.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return false;
+
+        var current = "/" + NavigationManager.ToBaseRelativePath(NavigationManager.Uri)
+            .Split('?')[0]
+            .TrimEnd('/');
+
+        var target = "/" + item.Url.Trim('/');
+
+        // Only "/" matches the home page exactly; every other entry also matches its children.
+        return target == "/"
+            ? current is "/" or ""
+            : current == target || current.StartsWith(target + "/", StringComparison.OrdinalIgnoreCase);
+    }
+}

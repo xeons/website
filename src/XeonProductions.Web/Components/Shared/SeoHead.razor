@@ -1,0 +1,171 @@
+@using System.Text.Json
+@using XeonProductions.Web.Middleware
+@inject ISiteSettingsService SettingsService
+@inject NavigationManager Nav
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>@FullTitle</PageTitle>
+
+<HeadContent>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <meta name="description" content="@Description" />
+    }
+
+    <link rel="canonical" href="@CanonicalUrl" />
+
+    @if (NoIndex || !_settings.SearchEngineVisible)
+    {
+        <meta name="robots" content="noindex,nofollow" />
+    }
+
+    <meta property="og:site_name" content="@_settings.SiteTitle" />
+    <meta property="og:type" content="@(IsArticle ? "article" : "website")" />
+    <meta property="og:title" content="@Title" />
+    <meta property="og:url" content="@CanonicalUrl" />
+
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <meta property="og:description" content="@Description" />
+    }
+
+    @if (!string.IsNullOrWhiteSpace(ImageUrl))
+    {
+        <meta property="og:image" content="@Absolute(ImageUrl)" />
+        <meta name="twitter:card" content="summary_large_image" />
+    }
+    else
+    {
+        <meta name="twitter:card" content="summary" />
+    }
+
+    <meta name="twitter:title" content="@Title" />
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <meta name="twitter:description" content="@Description" />
+    }
+
+    @if (IsArticle)
+    {
+        @if (PublishedAt is DateTimeOffset published)
+        {
+            <meta property="article:published_time" content="@published.ToString("o")" />
+        }
+        @if (ModifiedAt is DateTimeOffset modified)
+        {
+            <meta property="article:modified_time" content="@modified.ToString("o")" />
+        }
+        @if (!string.IsNullOrWhiteSpace(AuthorName))
+        {
+            <meta property="article:author" content="@AuthorName" />
+        }
+    }
+
+    @* Structured data. It is an inline script, so it carries the request nonce. *@
+    <script type="application/ld+json" nonce="@_nonce">@((MarkupString)_jsonLd)</script>
+</HeadContent>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public string? ImageUrl { get; set; }
+
+    [Parameter]
+    public bool NoIndex { get; set; }
+
+    [Parameter]
+    public bool IsArticle { get; set; }
+
+    [Parameter]
+    public DateTimeOffset? PublishedAt { get; set; }
+
+    [Parameter]
+    public DateTimeOffset? ModifiedAt { get; set; }
+
+    [Parameter]
+    public string? AuthorName { get; set; }
+
+    /// <summary>Overrides the canonical URL; defaults to the current request path.</summary>
+    [Parameter]
+    public string? Canonical { get; set; }
+
+    private SiteSettings _settings = new();
+    private string _jsonLd = "{}";
+    private string? _nonce;
+
+    private string FullTitle =>
+        string.IsNullOrWhiteSpace(_settings.SeoTitleSuffix)
+            ? $"{Title} - {_settings.SiteTitle}"
+            : $"{Title} {_settings.SeoTitleSuffix}";
+
+    private string SiteBase => _settings.SiteUrl.TrimEnd('/');
+
+    private string CanonicalUrl => !string.IsNullOrWhiteSpace(Canonical)
+        ? Absolute(Canonical)
+        : SiteBase + "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].TrimEnd('/');
+
+    private string Absolute(string? url) =>
+        string.IsNullOrWhiteSpace(url) ? SiteBase
+        : url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url
+        : $"{SiteBase}/{url.TrimStart('/')}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await SettingsService.GetAsync();
+        _nonce = HttpContextAccessor.HttpContext.GetCspNonce();
+
+        Description ??= _settings.DefaultMetaDescription;
+        ImageUrl ??= _settings.DefaultSocialImageUrl;
+
+        _jsonLd = BuildJsonLd();
+    }
+
+    private string BuildJsonLd()
+    {
+        object payload = IsArticle
+            ? new Dictionary<string, object?>
+            {
+                ["@context"] = "https://schema.org",
+                ["@type"] = "BlogPosting",
+                ["headline"] = Title,
+                ["description"] = Description,
+                ["url"] = CanonicalUrl,
+                ["datePublished"] = PublishedAt?.ToString("o"),
+                ["dateModified"] = (ModifiedAt ?? PublishedAt)?.ToString("o"),
+                ["image"] = string.IsNullOrWhiteSpace(ImageUrl) ? null : Absolute(ImageUrl),
+                ["author"] = string.IsNullOrWhiteSpace(AuthorName)
+                    ? null
+                    : new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = AuthorName },
+                ["publisher"] = new Dictionary<string, object?>
+                {
+                    ["@type"] = "Organization",
+                    ["name"] = _settings.SiteTitle
+                }
+            }
+            : new Dictionary<string, object?>
+            {
+                ["@context"] = "https://schema.org",
+                ["@type"] = "WebSite",
+                ["name"] = _settings.SiteTitle,
+                ["description"] = _settings.Tagline,
+                ["url"] = SiteBase,
+                ["potentialAction"] = new Dictionary<string, object?>
+                {
+                    ["@type"] = "SearchAction",
+                    ["target"] = $"{SiteBase}/search?q={{search_term_string}}",
+                    ["query-input"] = "required name=search_term_string"
+                }
+            };
+
+        // JavaScriptEncoder default escapes <, > and & , so the payload cannot close the tag.
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        });
+    }
+}

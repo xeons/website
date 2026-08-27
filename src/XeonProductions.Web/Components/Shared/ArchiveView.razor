@@ -1,0 +1,70 @@
+@inject ISiteSettingsService SettingsService
+
+@*
+    Shared body for every archive: category, tag, author and search results.
+*@
+
+<div class="page-header">
+    <h1>@Heading</h1>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <p>@Description</p>
+    }
+    else
+    {
+        <p>@Result.TotalCount @(Result.TotalCount == 1 ? "post" : "posts")</p>
+    }
+</div>
+
+@if (Result.Items.Count == 0)
+{
+    <div class="entry">
+        <h2>@EmptyHeading</h2>
+        <p>@EmptyMessage</p>
+    </div>
+}
+else
+{
+    @foreach (var post in Result.Items)
+    {
+        <PostSummary Post="post"
+                     Display="_settings.BlogContentDisplay"
+                     ShowReadingTime="_settings.ShowReadingTime"
+                     DateFormat="@_settings.DateFormat" />
+    }
+
+    <Pagination CurrentPage="Result.Page"
+                TotalPages="Result.TotalPages"
+                BasePath="@BasePath"
+                QueryString="@QueryString" />
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Heading { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter, EditorRequired]
+    public PagedResult<Post> Result { get; set; } = new([], 1, 10, 0);
+
+    [Parameter, EditorRequired]
+    public string BasePath { get; set; } = "/";
+
+    [Parameter]
+    public string? QueryString { get; set; }
+
+    [Parameter]
+    public string EmptyHeading { get; set; } = "Nothing here yet";
+
+    [Parameter]
+    public string EmptyMessage { get; set; } = "There are no published posts in this archive.";
+
+    private SiteSettings _settings = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await SettingsService.GetAsync();
+    }
+}

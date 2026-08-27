@@ -1,0 +1,135 @@
+@page "/{*Path}"
+@inject IContentService Content
+@inject IContentRenderer Renderer
+@inject IMediaService Media
+@inject NavigationManager Nav
+
+@*
+    Catch-all for CMS pages. Blazor ranks literal segments above parameters and catch-alls
+    last, so every declared route still wins over this one.
+*@
+
+@if (_page is not null)
+{
+    <SeoHead Title="@(_page.SeoTitle ?? _page.Title)"
+             Description="@_page.SeoDescription"
+             ImageUrl="@SocialImage"
+             NoIndex="_page.NoIndex"
+             ModifiedAt="_page.UpdatedAt"
+             Canonical="@(_page.CanonicalUrl ?? "/" + Path?.Trim('/'))" />
+
+    <PageShell Sidebar="SidebarFor(_page.Template)" Narrow="_page.Template == PageTemplate.Narrow">
+        @if (_breadcrumbs.Count > 1)
+        {
+            <nav class="breadcrumbs" aria-label="Breadcrumb">
+                <a href="/">Home</a>
+                @foreach (var crumb in _breadcrumbs)
+                {
+                    <span class="sep">/</span>
+                    @if (crumb.Url is null)
+                    {
+                        <span>@crumb.Label</span>
+                    }
+                    else
+                    {
+                        <a href="@crumb.Url">@crumb.Label</a>
+                    }
+                }
+            </nav>
+        }
+
+        <article class="entry">
+            @if (_page.ShowTitle && _page.Template != PageTemplate.Landing)
+            {
+                <header class="entry-header">
+                    <h1 class="entry-title">@_page.Title</h1>
+                </header>
+            }
+
+            @if (_page.FeaturedImage is not null)
+            {
+                <figure class="entry-image">
+                    <img src="@Media.PublicUrl(_page.FeaturedImage.RelativePath)"
+                         alt="@(_page.FeaturedImage.AltText ?? string.Empty)"
+                         width="@_page.FeaturedImage.Width" height="@_page.FeaturedImage.Height" />
+                </figure>
+            }
+
+            <div class="entry-content">
+                @((MarkupString)_renderedContent)
+            </div>
+        </article>
+
+        @if (_page.Children.Count > 0)
+        {
+            <section class="entry">
+                <h2>In this section</h2>
+                <ul>
+                    @foreach (var child in _page.Children)
+                    {
+                        <li><a href="@($"/{Path?.Trim('/')}/{child.Slug}")">@child.Title</a></li>
+                    }
+                </ul>
+            </section>
+        }
+    </PageShell>
+}
+
+@code {
+    [Parameter]
+    public string? Path { get; set; }
+
+    private Page? _page;
+    private string _renderedContent = string.Empty;
+    private List<(string Label, string? Url)> _breadcrumbs = [];
+
+    private string? SocialImage =>
+        _page?.SocialImageUrl
+        ?? (_page?.FeaturedImage is not null ? Media.PublicUrl(_page.FeaturedImage.RelativePath) : null);
+
+    private static SidebarLayout? SidebarFor(PageTemplate template) => template switch
+    {
+        PageTemplate.FullWidth or PageTemplate.Landing or PageTemplate.Narrow => SidebarLayout.NoSidebar,
+        _ => null
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _page = string.IsNullOrWhiteSpace(Path) ? null : await Content.GetPageByPathAsync(Path);
+
+        if (_page is null)
+        {
+            // Hands off to the router's NotFoundPage and sets a real 404 status.
+            Nav.NotFound();
+            return;
+        }
+
+        _renderedContent = Renderer.Render(_page.ContentHtml);
+        _breadcrumbs = BuildBreadcrumbs(Path!, _page.Title);
+    }
+
+    /// <summary>
+    /// Builds the trail from the URL segments so no extra query is needed; only the last
+    /// crumb has a title we know, the rest are humanised slugs.
+    /// </summary>
+    private static List<(string Label, string? Url)> BuildBreadcrumbs(string path, string title)
+    {
+        var segments = path.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var crumbs = new List<(string, string?)>();
+        var accumulated = string.Empty;
+
+        for (var i = 0; i < segments.Length; i++)
+        {
+            accumulated += "/" + segments[i];
+            var isLast = i == segments.Length - 1;
+
+            crumbs.Add((isLast ? title : Humanise(segments[i]), isLast ? null : accumulated));
+        }
+
+        return crumbs;
+    }
+
+    private static string Humanise(string slug) =>
+        string.Join(' ', slug.Split('-').Select(word =>
+            word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word[1..]));
+}

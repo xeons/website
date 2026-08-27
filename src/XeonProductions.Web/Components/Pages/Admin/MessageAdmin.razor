@@ -1,0 +1,152 @@
+@page "/admin/messages"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<PageTitle>Messages</PageTitle>
+
+<AdminShell Title="Messages" Subtitle="@($"{_messages.Count} shown")">
+    <ChildContent>
+        <div class="toolbar">
+            <button class="btn @(_filter == Filter.Inbox ? "" : "btn-secondary")"
+                    @onclick="() => SetFilterAsync(Filter.Inbox)">Inbox</button>
+            <button class="btn @(_filter == Filter.Archived ? "" : "btn-secondary")"
+                    @onclick="() => SetFilterAsync(Filter.Archived)">Archived</button>
+            <button class="btn @(_filter == Filter.Spam ? "" : "btn-secondary")"
+                    @onclick="() => SetFilterAsync(Filter.Spam)">Spam</button>
+        </div>
+
+        @if (_messages.Count == 0)
+        {
+            <div class="empty-state">Nothing here.</div>
+        }
+        else
+        {
+            @foreach (var message in _messages)
+            {
+                <div class="admin-card">
+                    <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
+                        <div style="min-width:0">
+                            <div class="row-title">
+                                @(string.IsNullOrWhiteSpace(message.Subject)
+                                    ? "(no subject)" : message.Subject)
+                                @if (!message.IsRead && !message.IsSpam)
+                                {
+                                    <span class="badge badge-scheduled">New</span>
+                                }
+                                @if (!message.WasEmailed && !message.IsSpam)
+                                {
+                                    <span class="badge badge-archived">Not emailed</span>
+                                }
+                            </div>
+                            <div class="row-sub">
+                                @message.Name &lt;<a href="mailto:@message.Email">@message.Email</a>&gt;
+                                on @message.CreatedAt.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                            </div>
+                        </div>
+
+                        <div style="white-space:nowrap">
+                            <a class="btn btn-secondary btn-sm"
+                               href="@BuildReplyLink(message)">Reply</a>
+
+                            @if (!message.IsArchived)
+                            {
+                                <button class="btn btn-secondary btn-sm"
+                                        @onclick="() => ArchiveAsync(message.Id, true)">Archive</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-secondary btn-sm"
+                                        @onclick="() => ArchiveAsync(message.Id, false)">Restore</button>
+                            }
+
+                            <button class="btn btn-danger btn-sm"
+                                    @onclick="() => DeleteAsync(message.Id)">Delete</button>
+                        </div>
+                    </div>
+
+                    <p style="white-space:pre-wrap;margin-top:14px">@message.Body</p>
+
+                    @if (!string.IsNullOrWhiteSpace(message.IpAddress))
+                    {
+                        <p class="row-sub">Sent from @message.IpAddress</p>
+                    }
+                </div>
+            }
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private enum Filter { Inbox, Archived, Spam }
+
+    private List<ContactMessage> _messages = [];
+    private Filter _filter = Filter.Inbox;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var query = _filter switch
+        {
+            Filter.Archived => db.ContactMessages.Where(m => m.IsArchived && !m.IsSpam),
+            Filter.Spam => db.ContactMessages.Where(m => m.IsSpam),
+            _ => db.ContactMessages.Where(m => !m.IsArchived && !m.IsSpam)
+        };
+
+        _messages = await query
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(100)
+            .ToListAsync();
+
+        // Opening the inbox is what marks messages read.
+        if (_filter == Filter.Inbox)
+        {
+            var unreadIds = _messages.Where(m => !m.IsRead).Select(m => m.Id).ToList();
+
+            if (unreadIds.Count > 0)
+            {
+                await db.ContactMessages
+                    .Where(m => unreadIds.Contains(m.Id))
+                    .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsRead, true));
+            }
+        }
+    }
+
+    private async Task SetFilterAsync(Filter filter)
+    {
+        _filter = filter;
+        await LoadAsync();
+    }
+
+    private async Task ArchiveAsync(int id, bool archived)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        await db.ContactMessages
+            .Where(m => m.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.IsArchived, archived));
+
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        await db.ContactMessages.Where(m => m.Id == id).ExecuteDeleteAsync();
+        await LoadAsync();
+    }
+
+    private static string BuildReplyLink(ContactMessage message)
+    {
+        var subject = string.IsNullOrWhiteSpace(message.Subject)
+            ? "Re: your message"
+            : $"Re: {message.Subject}";
+
+        return $"mailto:{message.Email}?subject={Uri.EscapeDataString(subject)}";
+    }
+}

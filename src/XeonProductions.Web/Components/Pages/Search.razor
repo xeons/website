@@ -1,0 +1,63 @@
+@page "/search"
+@page "/search/page/{PageNumber:int}"
+@inject IContentService Content
+@inject ISiteSettingsService SettingsService
+
+@* Search result pages are noindex by design: they are thin and infinitely variable. *@
+<SeoHead Title="@(HasQuery ? $"Search: {Query}" : "Search")" NoIndex="true" Canonical="/search" />
+
+<PageShell>
+    <div class="page-header">
+        <h1>Search</h1>
+        <form class="search-form" action="/search" method="get" role="search">
+            <label class="screen-reader-text" for="site-search">Search terms</label>
+            <input type="search" id="site-search" name="q" value="@Query"
+                   placeholder="Search posts..." autofocus />
+            <button class="btn" type="submit">Search</button>
+        </form>
+    </div>
+
+    @if (!HasQuery)
+    {
+        <div class="entry">
+            <h2>What are you looking for?</h2>
+            <p>Enter a term above to search post titles and content.</p>
+        </div>
+    }
+    else if (_result.Items.Count == 0)
+    {
+        <div class="entry">
+            <h2>No matches for &ldquo;@Query&rdquo;</h2>
+            <p>Try a shorter or more general term, or browse the <a href="/">latest posts</a>.</p>
+        </div>
+    }
+    else
+    {
+        <ArchiveView Heading="@($"{_result.TotalCount} result{(_result.TotalCount == 1 ? "" : "s")} for: {Query}")"
+                     Description=" "
+                     Result="_result"
+                     BasePath="/search"
+                     QueryString="@($"q={Uri.EscapeDataString(Query!)}")" />
+    }
+</PageShell>
+
+@code {
+    [Parameter]
+    public int PageNumber { get; set; } = 1;
+
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Query { get; set; }
+
+    private PagedResult<Post> _result = new([], 1, 10, 0);
+
+    private bool HasQuery => !string.IsNullOrWhiteSpace(Query);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!HasQuery) return;
+
+        var settings = await SettingsService.GetAsync();
+        _result = await Content.SearchPostsAsync(
+            Query!, PageNumber <= 0 ? 1 : PageNumber, settings.PostsPerPage);
+    }
+}

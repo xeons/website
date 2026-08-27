@@ -1,0 +1,286 @@
+@page "/admin/pages/new"
+@page "/admin/pages/{Id:int}"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject AdminContentService Admin
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>@(Id is null ? "New page" : "Edit page")</PageTitle>
+
+<AdminShell Title="@(Id is null ? "New page" : "Edit page")" Subtitle="@_subtitle">
+    <Actions>
+        <a class="btn btn-secondary" href="/admin/pages">Back to list</a>
+        <button class="btn" @onclick="SaveAsync" disabled="@_saving">
+            @(_saving ? "Saving..." : "Save")
+        </button>
+    </Actions>
+
+    <ChildContent>
+        @if (_notFound)
+        {
+            <div class="empty-state">That page does not exist.</div>
+        }
+        else
+        {
+            @if (_message is not null)
+            {
+                <div class="notice notice-success" role="status">@_message</div>
+            }
+            @if (_error is not null)
+            {
+                <div class="notice notice-error" role="alert">@_error</div>
+            }
+
+            <div class="editor-grid">
+                <div class="editor-main">
+                    <div class="admin-card">
+                        <div class="field">
+                            <label for="page-title">Title</label>
+                            <input id="page-title" class="title-input" @bind="_page.Title"
+                                   @bind:event="oninput" placeholder="Page title" />
+                        </div>
+
+                        <div class="slug-row">
+                            <span>@_parentPath/</span>
+                            <input @bind="_page.Slug" placeholder="auto-generated-from-title" />
+                        </div>
+                    </div>
+
+                    <div class="admin-card editor-content">
+                        <div class="field">
+                            <label>Content</label>
+                            <RichTextEditor @bind-Value="_page.ContentHtml" MinHeight="520" />
+                            <span class="field-hint">
+                                Saved through a sanitiser: script tags and event handlers are
+                                stripped, and iframes are limited to known embed hosts.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <h2>Search engine listing</h2>
+
+                        <div class="field">
+                            <label for="page-seo-title">SEO title</label>
+                            <input id="page-seo-title" @bind="_page.SeoTitle" placeholder="@_page.Title" />
+                        </div>
+
+                        <div class="field">
+                            <label for="page-seo-desc">Meta description</label>
+                            <textarea id="page-seo-desc" @bind="_page.SeoDescription" rows="2"
+                                      style="min-height:auto"></textarea>
+                        </div>
+
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="page-canonical">Canonical URL</label>
+                                <input id="page-canonical" @bind="_page.CanonicalUrl"
+                                       placeholder="Leave blank for the default" />
+                            </div>
+                            <div class="field">
+                                <label for="page-social">Social image URL</label>
+                                <input id="page-social" @bind="_page.SocialImageUrl" />
+                            </div>
+                        </div>
+
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="page-noindex" @bind="_page.NoIndex" />
+                            <label for="page-noindex">Ask search engines not to index this page</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="editor-sidebar">
+                    <div class="admin-card">
+                        <h2>Publish</h2>
+
+                        <div class="field">
+                            <label for="page-status">Status</label>
+                            <select id="page-status" @bind="_page.Status">
+                                @foreach (var status in Enum.GetValues<ContentStatus>())
+                                {
+                                    <option value="@status">@status</option>
+                                }
+                            </select>
+                        </div>
+
+                        <button class="btn" style="width:100%" @onclick="SaveAsync" disabled="@_saving">
+                            @(_saving ? "Saving..." : "Save page")
+                        </button>
+                    </div>
+
+                    <div class="admin-card">
+                        <h2>Placement</h2>
+
+                        <div class="field">
+                            <label for="page-parent">Parent page</label>
+                            <select id="page-parent" @bind="_parentId">
+                                <option value="0">No parent (top level)</option>
+                                @foreach (var candidate in _parentCandidates)
+                                {
+                                    <option value="@candidate.Id">@candidate.Title</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="page-order">Menu order</label>
+                            <input id="page-order" type="number" @bind="_page.MenuOrder" />
+                        </div>
+
+                        <div class="field">
+                            <label for="page-template">Template</label>
+                            <select id="page-template" @bind="_page.Template">
+                                <option value="@PageTemplate.Default">Default (with sidebar)</option>
+                                <option value="@PageTemplate.FullWidth">Full width</option>
+                                <option value="@PageTemplate.Narrow">Narrow reading column</option>
+                                <option value="@PageTemplate.Landing">Landing (no title)</option>
+                            </select>
+                        </div>
+
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="page-showtitle" @bind="_page.ShowTitle" />
+                            <label for="page-showtitle">Show the title heading</label>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <MediaPicker @bind-SelectedId="_page.FeaturedImageId" />
+                    </div>
+                </div>
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private Page _page = new() { Status = ContentStatus.Draft, ShowTitle = true };
+    private List<Page> _parentCandidates = [];
+    private int _parentId;
+
+    private bool _saving;
+    private bool _notFound;
+    private string? _message;
+    private string? _error;
+    private string _subtitle = string.Empty;
+    private string _parentPath = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var all = await db.Pages.AsNoTracking().OrderBy(p => p.Title).ToListAsync();
+
+        if (Id is null)
+        {
+            _page = new Page { Status = ContentStatus.Draft, ShowTitle = true };
+            _parentId = 0;
+            _parentCandidates = all;
+            _subtitle = "Not saved yet";
+            _parentPath = string.Empty;
+            return;
+        }
+
+        var loaded = all.FirstOrDefault(p => p.Id == Id);
+        if (loaded is null)
+        {
+            _notFound = true;
+            return;
+        }
+
+        _page = loaded;
+        _parentId = loaded.ParentId ?? 0;
+
+        // A page cannot be nested under itself or any of its own descendants.
+        var descendants = Descendants(all, loaded.Id);
+        _parentCandidates = all.Where(p => p.Id != loaded.Id && !descendants.Contains(p.Id)).ToList();
+
+        _parentPath = BuildParentPath(all, loaded.ParentId);
+        _subtitle = $"Last updated {loaded.UpdatedAt.ToLocalTime():d MMM yyyy, HH:mm}";
+    }
+
+    private static HashSet<int> Descendants(List<Page> all, int rootId)
+    {
+        var result = new HashSet<int>();
+        var queue = new Queue<int>();
+        queue.Enqueue(rootId);
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            foreach (var child in all.Where(p => p.ParentId == current))
+            {
+                if (result.Add(child.Id)) queue.Enqueue(child.Id);
+            }
+        }
+
+        return result;
+    }
+
+    private static string BuildParentPath(List<Page> all, int? parentId)
+    {
+        var segments = new List<string>();
+        var cursor = parentId;
+        var guard = 0;
+
+        while (cursor is int id && guard++ < 20)
+        {
+            var node = all.FirstOrDefault(p => p.Id == id);
+            if (node is null) break;
+
+            segments.Insert(0, node.Slug);
+            cursor = node.ParentId;
+        }
+
+        return segments.Count == 0 ? string.Empty : "/" + string.Join('/', segments);
+    }
+
+    private async Task SaveAsync()
+    {
+        _message = null;
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_page.Title))
+        {
+            _error = "A title is required.";
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            _page.ParentId = _parentId == 0 ? null : _parentId;
+
+            var authState = await AuthState.GetAuthenticationStateAsync();
+            var authorId = authState.User.FindFirst(
+                System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            var saved = await Admin.SavePageAsync(_page, authorId);
+
+            if (Id is null)
+            {
+                Nav.NavigateTo($"/admin/pages/{saved.Id}");
+                return;
+            }
+
+            _page = saved;
+            _subtitle = $"Last updated {saved.UpdatedAt.ToLocalTime():d MMM yyyy, HH:mm}";
+            _message = "Saved.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not save: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

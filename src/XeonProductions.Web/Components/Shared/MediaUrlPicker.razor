@@ -1,0 +1,112 @@
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IMediaService Media
+
+@*
+    Picks an image from the media library, or takes a URL typed in by hand. Settings store
+    plain URLs rather than media ids, so an externally hosted image stays possible.
+*@
+
+<div class="field">
+    <label for="@_inputId">@Label</label>
+
+    <div class="picker-row">
+        <input id="@_inputId" value="@Value" @oninput="OnTypedAsync"
+               placeholder="@Placeholder" />
+        <button class="btn btn-secondary" type="button" @onclick="ToggleAsync">
+            @(_open ? "Close" : "Browse")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Hint))
+    {
+        <span class="field-hint">@Hint</span>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Value))
+    {
+        <div class="picker-preview">
+            <img src="@Value" alt="" />
+            <button class="btn btn-secondary btn-sm" type="button" @onclick="ClearAsync">Clear</button>
+        </div>
+    }
+
+    @if (_open)
+    {
+        @if (_items.Count == 0)
+        {
+            <div class="empty-state" style="padding:24px;margin-top:12px">
+                No images uploaded yet. Add some under <a href="/admin/media">Media</a>.
+            </div>
+        }
+        else
+        {
+            <div class="media-grid" style="margin-top:12px">
+                @foreach (var item in _items)
+                {
+                    <button type="button" class="media-tile" @onclick="() => SelectAsync(item)">
+                        <div class="media-thumb">
+                            <img src="@Media.ThumbnailUrl(item)" alt="@item.AltText" loading="lazy" />
+                        </div>
+                        <div class="media-meta"><span class="name">@item.FileName</span></div>
+                    </button>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Hint { get; set; }
+
+    [Parameter]
+    public string Placeholder { get; set; } = "https://example.com/image.png or /media/2026/08/logo.png";
+
+    private readonly string _inputId = $"mediaurl-{Guid.NewGuid():N}"[..20];
+
+    private List<MediaItem> _items = [];
+    private bool _open;
+
+    private async Task ToggleAsync()
+    {
+        _open = !_open;
+        if (!_open || _items.Count > 0) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _items = await db.Media.AsNoTracking()
+            .Where(m => m.ContentType.StartsWith("image/"))
+            .OrderByDescending(m => m.UploadedAt)
+            .Take(60)
+            .ToListAsync();
+    }
+
+    private async Task SelectAsync(MediaItem item)
+    {
+        _open = false;
+        Value = Media.PublicUrl(item.RelativePath);
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private async Task OnTypedAsync(ChangeEventArgs e)
+    {
+        var typed = e.Value?.ToString();
+        Value = string.IsNullOrWhiteSpace(typed) ? null : typed.Trim();
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private async Task ClearAsync()
+    {
+        Value = null;
+        await ValueChanged.InvokeAsync(null);
+    }
+}

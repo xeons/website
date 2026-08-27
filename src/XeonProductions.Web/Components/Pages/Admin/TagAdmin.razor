@@ -1,0 +1,145 @@
+@page "/admin/tags"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject AdminContentService Admin
+
+<PageTitle>Tags</PageTitle>
+
+<AdminShell Title="Tags" Subtitle="@($"{_rows.Count} shown")">
+    <Actions>
+        <button class="btn btn-secondary" @onclick="PruneAsync">Remove unused tags</button>
+    </Actions>
+
+    <ChildContent>
+        @if (_message is not null)
+        {
+            <div class="notice notice-success" role="status">@_message</div>
+        }
+
+        <div class="toolbar">
+            <input type="search" placeholder="Filter tags..." value="@_search"
+                   @oninput="OnSearchChanged" />
+        </div>
+
+        @if (_editing is not null)
+        {
+            <div class="admin-card">
+                <h2>Rename tag</h2>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="tag-name">Name</label>
+                        <input id="tag-name" @bind="_editing.Name" />
+                    </div>
+                    <div class="field">
+                        <label for="tag-slug">Slug</label>
+                        <input id="tag-slug" @bind="_editing.Slug" />
+                    </div>
+                </div>
+                <button class="btn" @onclick="SaveAsync">Save</button>
+                <button class="btn btn-secondary" @onclick="() => _editing = null">Cancel</button>
+            </div>
+        }
+
+        @if (_rows.Count == 0)
+        {
+            <div class="empty-state">No tags match.</div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Slug</th>
+                            <th>Posts</th>
+                            <th class="col-actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td class="row-title">@row.Tag.Name</td>
+                                <td class="row-sub">/tag/@row.Tag.Slug</td>
+                                <td class="row-sub">@row.PostCount</td>
+                                <td class="col-actions">
+                                    <button class="btn btn-secondary btn-sm"
+                                            @onclick="() => Edit(row.Tag)">Rename</button>
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => DeleteAsync(row.Tag.Id)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private record Row(Tag Tag, int PostCount);
+
+    private List<Row> _rows = [];
+    private Tag? _editing;
+    private string _search = string.Empty;
+    private string? _message;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var query = db.Tags.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            query = query.Where(t => EF.Functions.ILike(t.Name, $"%{_search.Trim()}%"));
+        }
+
+        _rows = await query
+            .OrderByDescending(t => t.Posts.Count).ThenBy(t => t.Name)
+            .Take(300)
+            .Select(t => new Row(t, t.Posts.Count))
+            .ToListAsync();
+    }
+
+    private async Task OnSearchChanged(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private void Edit(Tag tag) =>
+        _editing = new Tag { Id = tag.Id, Name = tag.Name, Slug = tag.Slug };
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null || string.IsNullOrWhiteSpace(_editing.Name)) return;
+
+        await Admin.SaveTagAsync(_editing);
+        _editing = null;
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await Admin.DeleteTagAsync(id);
+        if (_editing?.Id == id) _editing = null;
+        await LoadAsync();
+    }
+
+    private async Task PruneAsync()
+    {
+        var removed = await Admin.DeleteUnusedTagsAsync();
+        _message = removed == 0
+            ? "Every tag is attached to at least one post."
+            : $"Removed {removed} unused tag{(removed == 1 ? "" : "s")}.";
+
+        await LoadAsync();
+    }
+}

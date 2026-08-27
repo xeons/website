@@ -1,0 +1,303 @@
+@page "/admin/posts/new"
+@page "/admin/posts/{Id:int}"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject AdminContentService Admin
+@inject IHtmlService Html
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>@(Id is null ? "New post" : "Edit post")</PageTitle>
+
+<AdminShell Title="@(Id is null ? "New post" : "Edit post")" Subtitle="@_subtitle">
+    <Actions>
+        @if (_post.Id != 0 && _post.Status == ContentStatus.Published)
+        {
+            <a class="btn btn-secondary" target="_blank" rel="noopener"
+               href="@FeedEndpoints.PermalinkFor(_post.PublishedAt, _post.Slug)">View</a>
+        }
+        <a class="btn btn-secondary" href="/admin/posts">Back to list</a>
+        <button class="btn" @onclick="SaveAsync" disabled="@_saving">
+            @(_saving ? "Saving..." : "Save")
+        </button>
+    </Actions>
+
+    <ChildContent>
+        @if (_notFound)
+        {
+            <div class="empty-state">That post does not exist.</div>
+        }
+        else
+        {
+            @if (_message is not null)
+            {
+                <div class="notice notice-success" role="status">@_message</div>
+            }
+            @if (_error is not null)
+            {
+                <div class="notice notice-error" role="alert">@_error</div>
+            }
+
+            <div class="editor-grid">
+                <div class="editor-main">
+                    <div class="admin-card">
+                        <div class="field">
+                            <label for="post-title">Title</label>
+                            <input id="post-title" class="title-input" @bind="_post.Title"
+                                   @bind:event="oninput" placeholder="Post title" />
+                        </div>
+
+                        <div class="slug-row">
+                            <span>/@_datePrefix/</span>
+                            <input @bind="_post.Slug" placeholder="auto-generated-from-title" />
+                        </div>
+                    </div>
+
+                    <div class="admin-card editor-content">
+                        <div class="field">
+                            <label>Content</label>
+                            <RichTextEditor @bind-Value="_post.ContentHtml" MinHeight="520" />
+                            <span class="field-hint">
+                                Saved through a sanitiser: script tags and event handlers are
+                                stripped, and iframes are limited to known embed hosts.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="field">
+                            <label for="post-excerpt">Excerpt</label>
+                            <textarea id="post-excerpt" @bind="_post.Excerpt" rows="3"
+                                      style="min-height:auto"></textarea>
+                            <span class="field-hint">
+                                Shown in listings and feeds. Left blank, it is generated from the content.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <h2>Search engine listing</h2>
+
+                        <div class="field">
+                            <label for="seo-title">SEO title</label>
+                            <input id="seo-title" @bind="_post.SeoTitle"
+                                   placeholder="@_post.Title" />
+                        </div>
+
+                        <div class="field">
+                            <label for="seo-desc">Meta description</label>
+                            <textarea id="seo-desc" @bind="_post.SeoDescription" rows="2"
+                                      style="min-height:auto"></textarea>
+                        </div>
+
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="seo-canonical">Canonical URL</label>
+                                <input id="seo-canonical" @bind="_post.CanonicalUrl"
+                                       placeholder="Leave blank for the default" />
+                            </div>
+                            <div class="field">
+                                <label for="seo-social">Social image URL</label>
+                                <input id="seo-social" @bind="_post.SocialImageUrl"
+                                       placeholder="Defaults to the featured image" />
+                            </div>
+                        </div>
+
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="seo-noindex" @bind="_post.NoIndex" />
+                            <label for="seo-noindex">Ask search engines not to index this post</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="editor-sidebar">
+                    <div class="admin-card">
+                        <h2>Publish</h2>
+
+                        <div class="field">
+                            <label for="post-status">Status</label>
+                            <select id="post-status" @bind="_post.Status">
+                                @foreach (var status in Enum.GetValues<ContentStatus>())
+                                {
+                                    <option value="@status">@status</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="post-date">Publish date</label>
+                            <input id="post-date" type="datetime-local" @bind="_publishLocal" />
+                            <span class="field-hint">
+                                A future date holds the post back until then.
+                            </span>
+                        </div>
+
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="post-sticky" @bind="_post.IsSticky" />
+                            <label for="post-sticky">Pin to the top of the blog</label>
+                        </div>
+
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="post-comments" @bind="_post.AllowComments" />
+                            <label for="post-comments">Allow comments</label>
+                        </div>
+
+                        <button class="btn" style="width:100%;margin-top:8px"
+                                @onclick="SaveAsync" disabled="@_saving">
+                            @(_saving ? "Saving..." : "Save post")
+                        </button>
+                    </div>
+
+                    <div class="admin-card">
+                        <h2>Categories</h2>
+                        @if (_categories.Count == 0)
+                        {
+                            <p class="row-sub">
+                                None yet. <a href="/admin/categories">Create one</a>.
+                            </p>
+                        }
+                        else
+                        {
+                            @foreach (var category in _categories)
+                            {
+                                <div class="checkbox-row">
+                                    <input type="checkbox" id="cat-@category.Id"
+                                           checked="@_selectedCategories.Contains(category.Id)"
+                                           @onchange="e => ToggleCategory(category.Id, e)" />
+                                    <label for="cat-@category.Id">@category.Name</label>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <div class="admin-card">
+                        <h2>Tags</h2>
+                        <div class="field">
+                            <input @bind="_tagInput" placeholder="tag one, tag two" />
+                            <span class="field-hint">
+                                Comma separated. Unknown tags are created on save.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <MediaPicker @bind-SelectedId="_post.FeaturedImageId" />
+                    </div>
+                </div>
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private Post _post = new() { AllowComments = true, Status = ContentStatus.Draft };
+    private List<Category> _categories = [];
+    private HashSet<int> _selectedCategories = [];
+    private string _tagInput = string.Empty;
+    private DateTime? _publishLocal;
+
+    private bool _saving;
+    private bool _notFound;
+    private string? _message;
+    private string? _error;
+    private string _subtitle = string.Empty;
+
+    private string _datePrefix = DateTimeOffset.Now.ToString("yyyy/MM/dd");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _categories = await db.Categories.AsNoTracking().OrderBy(c => c.Name).ToListAsync();
+
+        if (Id is null)
+        {
+            _post = new Post { AllowComments = true, Status = ContentStatus.Draft };
+            _selectedCategories = [];
+            _tagInput = string.Empty;
+            _publishLocal = null;
+            _subtitle = "Not saved yet";
+            return;
+        }
+
+        var loaded = await db.Posts.AsNoTracking()
+            .Include(p => p.Categories)
+            .Include(p => p.Tags)
+            .FirstOrDefaultAsync(p => p.Id == Id);
+
+        if (loaded is null)
+        {
+            _notFound = true;
+            return;
+        }
+
+        _post = loaded;
+        _selectedCategories = loaded.Categories.Select(c => c.Id).ToHashSet();
+        _tagInput = string.Join(", ", loaded.Tags.OrderBy(t => t.Name).Select(t => t.Name));
+        _publishLocal = loaded.PublishedAt?.ToLocalTime().DateTime;
+        _datePrefix = (loaded.PublishedAt ?? DateTimeOffset.Now).ToLocalTime().ToString("yyyy/MM/dd");
+        _subtitle = $"Last updated {loaded.UpdatedAt.ToLocalTime():d MMM yyyy, HH:mm}";
+    }
+
+    private void ToggleCategory(int categoryId, ChangeEventArgs e)
+    {
+        if (e.Value is true) _selectedCategories.Add(categoryId);
+        else _selectedCategories.Remove(categoryId);
+    }
+
+    private async Task SaveAsync()
+    {
+        _message = null;
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_post.Title))
+        {
+            _error = "A title is required.";
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            // The picker gives a local wall-clock time; store it with the machine's offset.
+            _post.PublishedAt = _publishLocal is DateTime local
+                ? new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local)).ToUniversalTime()
+                : null;
+
+            var authState = await AuthState.GetAuthenticationStateAsync();
+            var authorId = authState.User.FindFirst(
+                System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            var tags = _tagInput.Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+            var saved = await Admin.SavePostAsync(_post, _selectedCategories, tags, authorId);
+
+            if (Id is null)
+            {
+                // Move to the canonical edit URL so a refresh does not create a second post.
+                Nav.NavigateTo($"/admin/posts/{saved.Id}");
+                return;
+            }
+
+            _post = saved;
+            _publishLocal = saved.PublishedAt?.ToLocalTime().DateTime;
+            _datePrefix = (saved.PublishedAt ?? DateTimeOffset.Now).ToLocalTime().ToString("yyyy/MM/dd");
+            _subtitle = $"Last updated {saved.UpdatedAt.ToLocalTime():d MMM yyyy, HH:mm}";
+            _message = "Saved.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not save: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

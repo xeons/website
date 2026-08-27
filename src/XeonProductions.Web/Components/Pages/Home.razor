@@ -1,0 +1,55 @@
+@page "/"
+@page "/page/{PageNumber:int}"
+@inject IContentService Content
+@inject ISiteSettingsService SettingsService
+
+<SeoHead Title="@(PageNumber > 1 ? $"Page {PageNumber}" : _settings.SiteTitle)"
+         Description="@_settings.Tagline"
+         NoIndex="PageNumber > 1"
+         Canonical="@(PageNumber > 1 ? $"/page/{PageNumber}" : "/")" />
+
+<PageShell>
+    @*
+        The blog index shows its posts without a banner heading, the way the old site did.
+        The heading still exists for screen readers and as the focus target Blazor moves to
+        after a navigation; without one, focus stays on the link that was clicked.
+    *@
+    <h1 class="screen-reader-text">
+        @(PageNumber > 1 ? $"{_settings.SiteTitle}, page {PageNumber}" : _settings.SiteTitle)
+    </h1>
+
+    @if (_result.Items.Count == 0)
+    {
+        <div class="entry">
+            <h1>Nothing published yet</h1>
+            <p>Once posts are published they will appear here.</p>
+        </div>
+    }
+    else
+    {
+        @foreach (var post in _result.Items)
+        {
+            <PostSummary Post="post"
+                         Display="_settings.BlogContentDisplay"
+                         ShowReadingTime="_settings.ShowReadingTime"
+                         DateFormat="@_settings.DateFormat" />
+        }
+
+        <Pagination CurrentPage="_result.Page" TotalPages="_result.TotalPages" BasePath="/" />
+    }
+</PageShell>
+
+@code {
+    [Parameter]
+    public int PageNumber { get; set; } = 1;
+
+    private SiteSettings _settings = new();
+    private PagedResult<Post> _result = new([], 1, 10, 0);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _settings = await SettingsService.GetAsync();
+        _result = await Content.GetPublishedPostsAsync(
+            PageNumber <= 0 ? 1 : PageNumber, _settings.PostsPerPage);
+    }
+}

@@ -1,0 +1,80 @@
+@*
+    Numbered pagination with an elided middle, matching the WordPress archive behaviour.
+    Rendered as plain links so it works without a Blazor circuit and crawlers can follow it.
+*@
+
+@if (TotalPages > 1)
+{
+    <nav class="pagination" aria-label="Pagination">
+        @if (CurrentPage > 1)
+        {
+            <a href="@Url(CurrentPage - 1)" rel="prev" aria-label="Previous page">&lsaquo; Prev</a>
+        }
+
+        @foreach (var number in PageNumbers())
+        {
+            if (number is null)
+            {
+                <span class="ellipsis" aria-hidden="true">...</span>
+            }
+            else if (number == CurrentPage)
+            {
+                <span class="current" aria-current="page">@number</span>
+            }
+            else
+            {
+                <a href="@Url(number.Value)">@number</a>
+            }
+        }
+
+        @if (CurrentPage < TotalPages)
+        {
+            <a href="@Url(CurrentPage + 1)" rel="next" aria-label="Next page">Next &rsaquo;</a>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public int CurrentPage { get; set; }
+
+    [Parameter, EditorRequired]
+    public int TotalPages { get; set; }
+
+    /// <summary>Base path without the page segment, for example "/category/blog".</summary>
+    [Parameter, EditorRequired]
+    public string BasePath { get; set; } = "/";
+
+    /// <summary>Query string appended to every link, used by the search results page.</summary>
+    [Parameter]
+    public string? QueryString { get; set; }
+
+    private string Url(int page)
+    {
+        var path = page <= 1
+            ? (BasePath == "/" ? "/" : BasePath.TrimEnd('/'))
+            : $"{BasePath.TrimEnd('/')}/page/{page}";
+
+        return string.IsNullOrEmpty(QueryString) ? path : $"{path}?{QueryString.TrimStart('?')}";
+    }
+
+    /// <summary>Always shows the first and last page plus a window around the current one.</summary>
+    private IEnumerable<int?> PageNumbers()
+    {
+        const int window = 2;
+        var last = 0;
+
+        for (var i = 1; i <= TotalPages; i++)
+        {
+            var isEdge = i == 1 || i == TotalPages;
+            var isNear = Math.Abs(i - CurrentPage) <= window;
+
+            if (!isEdge && !isNear) continue;
+
+            if (last != 0 && i - last > 1) yield return null;
+
+            yield return i;
+            last = i;
+        }
+    }
+}

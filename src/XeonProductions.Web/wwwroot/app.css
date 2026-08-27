@@ -1,0 +1,1060 @@
+/* ==========================================================================
+   Xeon Productions theme
+   Structure and class names deliberately mirror GeneratePress (site-header,
+   inside-header, content-area, widget-area, entry-meta ...) so the layout reads
+   the same way the WordPress theme did.
+   Colour, width and typography tokens are overridden per-site by the
+   <style> block that ThemeCssBuilder emits.
+   ========================================================================== */
+
+:root {
+    --accent: #1e73be;
+    --accent-rgb: 30, 115, 190;
+    --accent-hover: #185e9c;
+
+    --content-width: 1200px;
+    --sidebar-width: 30%;
+    --gutter: 40px;
+
+    --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-heading: var(--font-body);
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --font-size-body: 17px;
+
+    /* Light palette, drawn from the logo: pale sky, white surfaces, and the deep
+       navy of the artwork for the navigation and footer. Dark mode overrides all
+       of these further down. */
+    --bg: var(--page-bg, #eaf4fb);
+    --bg-surface: #ffffff;
+    --bg-subtle: #f1f7fc;
+    --bg-header: #ffffff;
+    --bg-nav: #14395e;
+    --bg-nav-hover: #1e5385;
+    --bg-footer: #14395e;
+    --bg-code: #f2f7fb;
+
+    --text: #16283d;
+    --text-muted: #5b6b7c;
+    --text-inverse: #ffffff;
+    --text-nav: #ffffff;
+
+    --border: #d8e5f0;
+    --border-strong: #b9cddf;
+
+    --radius: 4px;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, .06);
+    --shadow-md: 0 4px 14px rgba(16, 24, 40, .08);
+
+    --danger: #b42318;
+    --success: #027a48;
+    --warning: #b54708;
+}
+
+/* Dark palette: applied when chosen explicitly, or by system preference when
+   the visitor has expressed no preference. */
+:root[data-theme='dark'],
+:root:not([data-theme='light']) {
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+        /* Sampled from the dark logo: its background is black carrying a blue cast
+           (#000010 through #001040), so the neutrals are navy-black rather than grey
+           and the banner sits on the page instead of on top of it. */
+        --bg: #00040d;
+        --bg-surface: #05101d;
+        --bg-subtle: #0a1a2b;
+        --bg-header: #05101d;
+        --bg-nav: #000208;
+        --bg-nav-hover: #0b2440;
+        --bg-footer: #000208;
+        --bg-code: #020c17;
+
+        --text: #dceaf7;
+        --text-muted: #8aa4bd;
+        --text-nav: #eaf4ff;
+
+        --border: #102740;
+        --border-strong: #1c3d5e;
+
+        /* The logo's electric blue, too bright for a white page but right on this one. */
+        --accent: var(--accent-dark, #0090fc);
+        --accent-rgb: var(--accent-dark-rgb, 0, 144, 252);
+        --accent-hover: var(--accent-dark-hover, #45adfd);
+
+        color-scheme: dark;
+    }
+}
+
+:root[data-theme='dark'] {
+    /* Kept in step with the media-query block above. */
+    --bg: #00040d;
+    --bg-surface: #05101d;
+    --bg-subtle: #0a1a2b;
+    --bg-header: #05101d;
+    --bg-nav: #000208;
+    --bg-nav-hover: #0b2440;
+    --bg-footer: #000208;
+    --bg-code: #020c17;
+
+    --text: #dceaf7;
+    --text-muted: #8aa4bd;
+    --text-nav: #eaf4ff;
+
+    --border: #102740;
+    --border-strong: #1c3d5e;
+
+    --accent: var(--accent-dark, #0090fc);
+    --accent-rgb: var(--accent-dark-rgb, 0, 144, 252);
+    --accent-hover: var(--accent-dark-hover, #45adfd);
+
+    color-scheme: dark;
+}
+
+/* --------------------------------------------------------------- base ---- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--font-size-body);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    line-height: 1.25;
+    margin: 0 0 .6em;
+    font-weight: 600;
+    color: var(--text);
+}
+
+h1 { font-size: 2.1rem; }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.3rem; }
+h4 { font-size: 1.1rem; }
+
+p, ul, ol, dl, table, pre, blockquote, figure { margin: 0 0 1.4em; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover, a:focus-visible { color: var(--accent-hover); text-decoration: underline; }
+
+img, video, iframe { max-width: 100%; height: auto; }
+
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.5em 0; }
+
+code, kbd, samp {
+    font-family: var(--font-mono);
+    font-size: .875em;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: .1em .35em;
+}
+
+pre {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1em 1.2em;
+    overflow-x: auto;
+    line-height: 1.55;
+}
+
+pre code { background: none; border: 0; padding: 0; font-size: .9em; }
+
+blockquote {
+    border-left: 3px solid var(--accent);
+    padding: .2em 0 .2em 1.2em;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: .6em .8em; border-bottom: 1px solid var(--border); }
+th { font-weight: 600; background: var(--bg-subtle); }
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* Blazor moves focus to the page heading after a navigation, giving it tabindex="-1".
+   That is not a real tab stop and should not be drawn as one. */
+[tabindex="-1"]:focus,
+[tabindex="-1"]:focus-visible {
+    outline: none;
+}
+
+.screen-reader-text {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    background: var(--accent);
+    color: #fff;
+    padding: .7em 1.2em;
+}
+.skip-link:focus { left: 0; }
+
+/* ------------------------------------------------------------ container -- */
+
+.grid-container {
+    width: 100%;
+    max-width: var(--content-width);
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* --------------------------------------------------------------- header -- */
+
+.site-header {
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border);
+}
+
+.inside-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 22px 20px;
+}
+
+.site-branding { display: flex; align-items: center; gap: 14px; min-width: 0; max-width: 100%; }
+
+/* A logo is usually a wide banner. Fix the height and let the width follow the image's
+   own proportions, so it is never squashed, and cap the width so an extreme banner cannot
+   push the header wider than the page. */
+.site-logo { display: block; line-height: 0; }
+
+.site-logo img {
+    display: block;
+    height: auto;
+    max-height: var(--logo-max-height, 80px);
+    width: auto;
+    max-width: 100%;
+}
+
+/* The swap only applies when a dark variant was actually configured, which the has-dark
+   class marks. Hiding the light logo unconditionally would leave no logo at all in dark
+   mode for a site with a single one. */
+.site-logo .logo-dark { display: none; }
+
+:root[data-theme='dark'] .site-logo.has-dark .logo-light { display: none; }
+:root[data-theme='dark'] .site-logo.has-dark .logo-dark { display: block; }
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .site-logo.has-dark .logo-light { display: none; }
+    :root:not([data-theme='light']) .site-logo.has-dark .logo-dark { display: block; }
+}
+
+/* -------------------------------------------------------- banner header -- */
+/* The logo is drawn across the whole container as a masthead. Height is left to
+   the image's own proportions rather than capped, which is what a wide banner
+   wants; --logo-max-height does not apply in this layout. */
+
+.site-header.layout-banner { border-bottom: 0; }
+
+.site-header.layout-banner .inside-header {
+    display: block;
+    padding: 0;
+}
+
+.site-header.layout-banner .site-branding { display: block; }
+
+.site-header.layout-banner .site-logo {
+    display: block;
+    width: 100%;
+}
+
+/* Deliberately no display here. Setting it would outrank the rule that hides whichever
+   logo is not in use, and both would render at once. Visibility belongs to the theme
+   rules alone; this only governs size. */
+.site-header.layout-banner .site-logo img {
+    width: 100%;
+    height: auto;
+    max-height: none;
+    max-width: 100%;
+}
+
+.site-header.layout-banner .site-description {
+    padding: 10px 20px 0;
+    text-align: center;
+}
+
+/* -------------------------------------------------- navigation bar items -- */
+
+.inside-navigation { position: relative; }
+
+.menu-bar-items {
+    display: flex;
+    align-items: stretch;
+    margin-left: auto;
+}
+
+.menu-bar-item,
+.menu-bar-items .icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 46px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 0;
+    color: var(--text-nav);
+    background: none;
+    cursor: pointer;
+}
+
+.menu-bar-item:hover,
+.menu-bar-item:focus-visible,
+.menu-bar-items .icon-btn:hover,
+.menu-bar-items .icon-btn:focus-visible {
+    background: var(--bg-nav-hover);
+    color: var(--text-nav);
+    text-decoration: none;
+}
+
+/* ------------------------------------------------------- centred header -- */
+
+.site-header.layout-centered .inside-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+    position: relative;
+}
+
+.site-header.layout-centered .site-branding {
+    flex-direction: column;
+    align-items: center;
+    max-width: 100%;
+}
+
+/* The actions tuck into the corner rather than taking a row of their own. */
+.site-header.layout-centered .header-actions {
+    position: absolute;
+    top: 22px;
+    right: 20px;
+}
+
+.site-header.layout-centered + .main-navigation .main-nav { margin: 0 auto; }
+.site-header.layout-centered + .main-navigation .inside-navigation { justify-content: center; }
+
+.site-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -.01em;
+}
+.site-title a { color: var(--text); }
+.site-title a:hover { text-decoration: none; color: var(--accent); }
+
+.site-description {
+    margin: .2em 0 0;
+    color: var(--text-muted);
+    font-size: .85rem;
+}
+
+.header-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ----------------------------------------------------------- navigation -- */
+
+.main-navigation {
+    background: var(--bg-nav);
+    position: relative;
+    z-index: 40;
+}
+
+.main-navigation.is-sticky { position: sticky; top: 0; }
+
+.inside-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: var(--content-width);
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.main-nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.main-nav li { position: relative; }
+
+.main-nav a {
+    display: block;
+    padding: 14px 18px;
+    color: var(--text-nav);
+    font-size: .95rem;
+    line-height: 1.5;
+    text-decoration: none;
+}
+
+.main-nav a:hover,
+.main-nav a:focus-visible,
+.main-nav .current-menu-item > a {
+    background: var(--bg-nav-hover);
+    color: var(--text-nav);
+    text-decoration: none;
+}
+
+/* Sub-menus open on hover on pointer devices and on focus for keyboards. */
+.main-nav .sub-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 220px;
+    background: var(--bg-nav-hover);
+    box-shadow: var(--shadow-md);
+    flex-direction: column;
+}
+
+/* One step lighter than the sub-menu itself, whatever the nav colour is. */
+.main-nav .sub-menu a:hover,
+.main-nav .sub-menu .current-menu-item > a {
+    background: color-mix(in srgb, var(--bg-nav-hover) 80%, #ffffff);
+}
+
+.main-nav li:hover > .sub-menu,
+.main-nav li:focus-within > .sub-menu { display: flex; }
+
+.menu-toggle {
+    display: none;
+    background: none;
+    border: 0;
+    color: var(--text-nav);
+    padding: 14px 18px;
+    font: inherit;
+    font-size: .95rem;
+    cursor: pointer;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-search a { display: flex; align-items: center; }
+
+/* ------------------------------------------------------------- content --- */
+
+/* width:100% is load-bearing. This is a flex item of .site, which is a column flex
+   container, and it carries auto margins for centring. Auto margins on the cross axis
+   suppress the default stretch, so without an explicit width the element shrinks to fit
+   its own content and every page ends up a different width depending on how much it
+   contains. */
+.site-content {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--gutter);
+    width: 100%;
+    max-width: var(--content-width);
+    margin: 0 auto;
+    padding: var(--gutter) 20px;
+}
+
+.content-area { flex: 1 1 auto; min-width: 0; }
+
+.widget-area { flex: 0 0 var(--sidebar-width); }
+
+.site-content.sidebar-left { flex-direction: row-reverse; }
+.site-content.no-sidebar .content-area { max-width: 100%; }
+.site-content.narrow { max-width: 800px; }
+
+/* ----------------------------------------------------- one container ----- */
+/* Content and sidebar share a single surface, separated by rules rather than
+   gaps. The alternative, one card per entry, is the default. */
+
+.site-content.one-container {
+    background: var(--bg-surface);
+    padding: var(--gutter);
+}
+
+.site-content.one-container .entry,
+.site-content.one-container .widget {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+}
+
+/* A rule between entries, but not after the last one. */
+.site-content.one-container .entry {
+    margin-bottom: 0;
+    padding-bottom: var(--gutter);
+    border-bottom: 1px solid var(--border);
+}
+
+.site-content.one-container .content-area > .entry:last-of-type {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.site-content.one-container .entry + .entry { padding-top: var(--gutter); }
+
+.site-content.one-container .widget { margin-bottom: 32px; }
+.site-content.one-container .widget:last-child { margin-bottom: 0; }
+
+/* Inside the container this text sits on the surface, not the page background, so the
+   contrast tokens derived from the page background do not apply. */
+.site-content.one-container .page-header h1 { color: var(--text); }
+.site-content.one-container .page-header p,
+.site-content.one-container .breadcrumbs,
+.site-content.one-container .breadcrumbs a,
+.site-content.one-container .breadcrumbs span { color: var(--text-muted); }
+
+.site-content.one-container .pagination a,
+.site-content.one-container .pagination span { background: var(--bg-subtle); }
+
+/* --------------------------------------------------------------- entry --- */
+
+.entry {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 32px;
+    margin-bottom: var(--gutter);
+}
+
+.entry-header { margin-bottom: 1rem; }
+
+.entry-title { margin: 0 0 .35em; font-size: 1.9rem; }
+.entry-title a { color: var(--accent); }
+.entry-title a:hover { color: var(--accent-hover); text-decoration: none; }
+
+.entry-summary .entry-title,
+.archive .entry-title { font-size: 1.45rem; }
+
+.entry-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+    color: var(--text-muted);
+    font-size: .85rem;
+}
+
+.entry-meta a { color: var(--text-muted); }
+.entry-meta a:hover { color: var(--accent); }
+.entry-meta .sep { opacity: .45; }
+
+.entry-image { margin: 0 0 1.4em; }
+.entry-image img { width: 100%; border-radius: var(--radius); display: block; }
+
+.entry-content > *:last-child { margin-bottom: 0; }
+.entry-content h2 { margin-top: 1.8em; }
+.entry-content h3 { margin-top: 1.6em; }
+
+.entry-content ul, .entry-content ol { padding-left: 1.4em; }
+.entry-content li { margin-bottom: .4em; }
+
+.entry-content figure { margin-left: 0; margin-right: 0; }
+.entry-content figcaption {
+    font-size: .85rem;
+    color: var(--text-muted);
+    margin-top: .5em;
+}
+
+.read-more {
+    display: inline-block;
+    margin-top: .4em;
+    font-weight: 600;
+    font-size: .95rem;
+}
+
+.entry-footer { margin-top: 1.8em; padding-top: 1.2em; border-top: 1px solid var(--border); }
+
+.tag-list { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+
+.tag-list a {
+    display: inline-block;
+    padding: 3px 10px;
+    font-size: .8rem;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    color: var(--text-muted);
+}
+.tag-list a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+
+/* ------------------------------------------------------------ post nav --- */
+
+.post-navigation {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: var(--gutter);
+}
+
+.post-navigation a {
+    display: block;
+    padding: 18px 20px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+}
+.post-navigation a:hover { border-color: var(--accent); text-decoration: none; }
+.post-navigation .label { display: block; font-size: .78rem; color: var(--text-muted); margin-bottom: .3em; }
+.post-navigation .next { text-align: right; }
+
+/* ------------------------------------------------------------ author ----- */
+
+.author-box {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    padding: 24px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-top: 2em;
+}
+
+.author-box img { width: 64px; height: 64px; border-radius: 50%; flex: none; }
+.author-box p { margin: .3em 0 0; font-size: .92rem; color: var(--text-muted); }
+
+/* ----------------------------------------------------------- pagination -- */
+
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: var(--gutter);
+}
+
+.pagination a,
+.pagination span {
+    display: inline-block;
+    min-width: 40px;
+    text-align: center;
+    padding: 8px 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: .92rem;
+}
+
+.pagination a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.pagination .current { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.pagination .ellipsis { border: 0; background: none; min-width: 0; padding: 8px 4px; }
+
+/* -------------------------------------------------------------- widgets -- */
+
+.widget {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 22px 24px;
+    margin-bottom: 26px;
+}
+
+.widget-title {
+    font-size: 1.15rem;
+    font-weight: 300;
+    line-height: 1.3;
+    color: var(--text);
+    margin: 0 0 .8em;
+}
+
+.widget ul { list-style: none; margin: 0; padding: 0; }
+.widget li { margin-bottom: .6em; font-size: .93rem; line-height: 1.5; }
+.widget li:last-child { margin-bottom: 0; }
+.widget .link-note { display: block; color: var(--text-muted); font-size: .82rem; }
+
+.widget-post { display: block; }
+.widget-post .date { display: block; color: var(--text-muted); font-size: .8rem; }
+
+/* --------------------------------------------------------------- forms --- */
+
+.field { margin-bottom: 1.1em; }
+
+label { display: block; font-weight: 600; font-size: .9rem; margin-bottom: .4em; }
+
+input[type='text'], input[type='email'], input[type='url'], input[type='password'],
+input[type='search'], input[type='number'], input[type='datetime-local'],
+select, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: .95rem;
+    color: var(--text);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .18);
+}
+
+textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
+
+.field-hint { display: block; font-weight: 400; color: var(--text-muted); font-size: .82rem; margin-top: .35em; }
+
+.validation-message, .field-error { color: var(--danger); font-size: .85rem; margin-top: .35em; }
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font: inherit;
+    font-size: .95rem;
+    font-weight: 600;
+    line-height: 1.4;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.btn:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; text-decoration: none; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.btn-secondary { background: var(--bg-surface); color: var(--text); border-color: var(--border-strong); }
+.btn-secondary:hover { background: var(--bg-subtle); color: var(--text); border-color: var(--accent); }
+
+.btn-danger { background: var(--danger); border-color: var(--danger); }
+.btn-danger:hover { background: #8f1c14; border-color: #8f1c14; }
+
+.btn-sm { padding: 6px 12px; font-size: .85rem; }
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    color: inherit;
+    cursor: pointer;
+}
+.icon-btn:hover { background: var(--bg-subtle); border-color: var(--border); }
+
+.search-form { display: flex; gap: 8px; }
+.search-form input { flex: 1 1 auto; }
+
+/* ------------------------------------------------------------- notices --- */
+
+.notice {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-subtle);
+    font-size: .92rem;
+    margin-bottom: 1.2em;
+}
+
+.notice-success { border-color: rgba(2, 122, 72, .35); background: rgba(2, 122, 72, .08); color: var(--success); }
+.notice-error { border-color: rgba(180, 35, 24, .35); background: rgba(180, 35, 24, .08); color: var(--danger); }
+.notice-warning { border-color: rgba(181, 71, 8, .35); background: rgba(181, 71, 8, .08); color: var(--warning); }
+
+/* -------------------------------------------------------------- footer --- */
+
+.site-footer {
+    background: var(--bg-footer);
+    color: rgba(255, 255, 255, .78);
+    margin-top: auto;
+}
+
+.footer-widgets {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--gutter);
+    max-width: var(--content-width);
+    margin: 0 auto;
+    padding: 48px 20px;
+}
+
+.footer-widgets .widget {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+}
+
+.footer-widgets .widget-title { color: rgba(255, 255, 255, .6); border-bottom-color: rgba(255, 255, 255, .12); }
+.footer-widgets a { color: rgba(255, 255, 255, .82); }
+.footer-widgets a:hover { color: #fff; }
+
+.footer-bar {
+    border-top: 1px solid rgba(255, 255, 255, .1);
+}
+
+.inside-footer-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    max-width: var(--content-width);
+    margin: 0 auto;
+    padding: 20px;
+    font-size: .87rem;
+}
+
+.footer-nav ul { display: flex; flex-wrap: wrap; gap: 18px; list-style: none; margin: 0; padding: 0; }
+.footer-bar a { color: rgba(255, 255, 255, .82); }
+.footer-bar a:hover { color: #fff; }
+
+/* --------------------------------------------------------------- shell --- */
+
+.site {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* These sit directly on the page background, not inside a card, so they follow the
+   contrast tokens rather than the body text colour. */
+.page-header {
+    margin-bottom: var(--gutter);
+    padding-bottom: 1.2em;
+    border-bottom: 1px solid var(--border-on-bg, var(--border));
+}
+.page-header h1 { margin-bottom: .2em; color: var(--text-on-bg, var(--text)); }
+.page-header p { margin: 0; color: var(--text-muted-on-bg, var(--text-muted)); }
+
+.breadcrumbs {
+    font-size: .85rem;
+    color: var(--text-muted-on-bg, var(--text-muted));
+    margin-bottom: 1.2em;
+}
+.breadcrumbs a { color: var(--text-muted-on-bg, var(--text-muted)); }
+.breadcrumbs a:hover { color: var(--accent); }
+.breadcrumbs span { color: var(--text-muted-on-bg, var(--text-muted)); }
+.breadcrumbs .sep { margin: 0 .5em; opacity: .5; }
+
+/* ------------------------------------------------------------ responsive - */
+
+@media (max-width: 1024px) {
+    .site-content { flex-direction: column; gap: 28px; }
+    .widget-area { flex: 1 1 auto; width: 100%; }
+    .site-content.sidebar-left { flex-direction: column; }
+    .footer-widgets { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+    :root { --gutter: 24px; }
+
+    .inside-header { flex-direction: column; align-items: flex-start; gap: 14px; }
+
+    /* Never let a banner logo take half the screen height on a phone. */
+    .site-logo img { max-height: min(var(--logo-max-height, 80px), 64px); }
+
+    .site-header.layout-centered .header-actions { position: static; }
+
+    .menu-toggle { display: inline-flex; }
+
+    .main-nav { display: none; width: 100%; }
+    .main-nav.is-open { display: block; }
+    .main-nav ul { flex-direction: column; width: 100%; }
+    .main-nav .sub-menu { position: static; display: flex; box-shadow: none; padding-left: 16px; }
+
+    .inside-navigation {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-areas: "toggle actions" "menu menu";
+        align-items: center;
+        padding: 0;
+    }
+
+    .menu-toggle { grid-area: toggle; justify-self: start; }
+    .menu-bar-items { grid-area: actions; margin-left: 0; }
+    .main-nav { grid-area: menu; }
+
+    .entry { padding: 22px; }
+    .entry-title { font-size: 1.5rem; }
+    h1 { font-size: 1.7rem; }
+
+    .post-navigation { grid-template-columns: 1fr; }
+    .post-navigation .next { text-align: left; }
+
+    .footer-widgets { grid-template-columns: 1fr; padding: 32px 20px; }
+    .author-box { flex-direction: column; }
+}
+
+@media print {
+    .site-header, .main-navigation, .widget-area, .site-footer,
+    .post-navigation, .pagination { display: none !important; }
+    .entry { border: 0; box-shadow: none; padding: 0; }
+}
+
+/* ---------------------------------------------------------- theme icon --- */
+/* Show the icon for the theme the button will switch to. Scoped CSS cannot
+   reach :root, so these rules live here rather than beside the component. */
+
+.theme-icon-dark { display: none; }
+
+:root[data-theme='dark'] .theme-icon-light { display: none; }
+:root[data-theme='dark'] .theme-icon-dark { display: inline; }
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .theme-icon-light { display: none; }
+    :root:not([data-theme='light']) .theme-icon-dark { display: inline; }
+    :root[data-theme='dark'] .theme-icon-light { display: none; }
+}
+
+/* ------------------------------------------------------ syntax highlighting */
+/* Token classes come from ColorCode's HtmlClassFormatter, which emits generic
+   names such as "keyword" and "string". They are scoped under pre code so they
+   cannot collide with anything else on the page. */
+
+.entry-content pre {
+    position: relative;
+    tab-size: 4;
+}
+
+.entry-content pre code {
+    display: block;
+    white-space: pre;
+    color: var(--code-text);
+}
+
+:root {
+    --code-text: #24292f;
+    --code-keyword: #cf222e;
+    --code-string: #0a3069;
+    --code-comment: #6e7781;
+    --code-number: #0550ae;
+    --code-type: #953800;
+    --code-preprocessor: #8250df;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+        --code-text: #d6dae0;
+        --code-keyword: #ff7b72;
+        --code-string: #a5d6ff;
+        --code-comment: #8b949e;
+        --code-number: #79c0ff;
+        --code-type: #ffa657;
+        --code-preprocessor: #d2a8ff;
+    }
+}
+
+:root[data-theme='dark'] {
+    --code-text: #d6dae0;
+    --code-keyword: #ff7b72;
+    --code-string: #a5d6ff;
+    --code-comment: #8b949e;
+    --code-number: #79c0ff;
+    --code-type: #ffa657;
+    --code-preprocessor: #d2a8ff;
+}
+
+pre code .keyword,
+pre code .pseudo-keyword { color: var(--code-keyword); font-weight: 600; }
+
+pre code .string,
+pre code .string-c-style,
+pre code .html-attribute-value { color: var(--code-string); }
+
+pre code .comment,
+pre code .xml-doc-comment,
+pre code .xml-doc-tag { color: var(--code-comment); font-style: italic; }
+
+pre code .number { color: var(--code-number); }
+
+pre code .type,
+pre code .type-variable,
+pre code .constructor,
+pre code .predefined,
+pre code .html-element-name,
+pre code .css-selector { color: var(--code-type); }
+
+pre code .preprocessor-keyword,
+pre code .html-tag-delimiter,
+pre code .html-attribute-name,
+pre code .css-property-name { color: var(--code-preprocessor); }
+
+/* A wide sample scrolls inside its own block rather than stretching the page. */
+.entry-content pre { max-width: 100%; overflow-x: auto; }
+
+/* ---------------------------------------------------------- entry terms --- */
+/* Categories and tags closing an entry. One row per taxonomy, an icon standing
+   in for the label, comma separated links. */
+
+.entry-terms {
+    display: flex;
+    flex-direction: column;
+    /* This element also carries .entry-meta, which sets align-items:center for its own
+       single-row layout. Left unset here, that centres each taxonomy row instead of
+       aligning it with the post text. */
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 1.8em;
+    padding-top: 0;
+    border-top: 0;
+    font-size: .9rem;
+    color: var(--text-muted);
+}
+
+.entry-terms .cat-links,
+.entry-terms .tags-links {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0;
+    line-height: 1.6;
+}
+
+.entry-terms .term-icon {
+    flex: none;
+    margin-right: 8px;
+    /* Nudge the icon onto the text baseline rather than the line box. */
+    transform: translateY(2px);
+    color: var(--text-muted);
+}
+
+/* The comma belongs to the list, not to the link, so it is not underlined on hover and
+   Razor's inter-element whitespace cannot land in front of it. */
+.entry-terms a { color: var(--accent); }
+.entry-terms a:hover { color: var(--accent-hover); }
+
+.entry-terms .cat-links a:not(:last-of-type)::after,
+.entry-terms .tags-links a:not(:last-of-type)::after {
+    /* Razor emits the anchors with no whitespace between them, so the space belongs to
+       the separator rather than to the markup. */
+    content: ", ";
+    white-space: pre;
+    color: var(--text-muted);
+}

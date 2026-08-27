@@ -1,0 +1,72 @@
+@inject INavigationService Navigation
+
+<footer class="site-footer">
+    @if (_hasFooterWidgets)
+    {
+        <div class="footer-widgets">
+            @foreach (var area in FooterAreas)
+            {
+                <div>
+                    @foreach (var widget in _widgets[area])
+                    {
+                        <WidgetView Widget="widget" />
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    <div class="footer-bar">
+        <div class="inside-footer-bar">
+            <div>
+                <span>&copy; @DateTime.UtcNow.Year @Settings.SiteTitle</span>
+                @if (!string.IsNullOrWhiteSpace(Settings.FooterText))
+                {
+                    <span class="sep"> | </span>
+                    <span>@Settings.FooterText</span>
+                }
+            </div>
+
+            @if (_footerMenu.Count > 0)
+            {
+                <nav class="footer-nav" aria-label="Footer">
+                    <ul>
+                        @foreach (var item in _footerMenu)
+                        {
+                            <li>
+                                <a href="@item.Url"
+                                   target="@(item.OpenInNewTab ? "_blank" : null)"
+                                   rel="@(item.OpenInNewTab ? "noopener" : null)">@item.Label</a>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+            }
+        </div>
+    </div>
+</footer>
+
+@code {
+    [Parameter, EditorRequired]
+    public SiteSettings Settings { get; set; } = new();
+
+    private static readonly WidgetArea[] FooterAreas =
+    [
+        WidgetArea.FooterColumn1, WidgetArea.FooterColumn2, WidgetArea.FooterColumn3
+    ];
+
+    private readonly Dictionary<WidgetArea, IReadOnlyList<Widget>> _widgets = [];
+    private IReadOnlyList<MenuItem> _footerMenu = [];
+    private bool _hasFooterWidgets;
+
+    protected override async Task OnInitializedAsync()
+    {
+        foreach (var area in FooterAreas)
+            _widgets[area] = await Navigation.GetWidgetsAsync(area);
+
+        // Skip the whole grid when every column is empty, rather than leaving dead space.
+        _hasFooterWidgets = _widgets.Values.Any(list => list.Count > 0);
+
+        _footerMenu = await Navigation.GetMenuAsync(MenuLocation.Footer);
+    }
+}

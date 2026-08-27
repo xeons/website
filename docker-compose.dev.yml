@@ -1,0 +1,62 @@
+# Testing stack for a machine on the local network. No Caddy and no TLS: Caddy needs public
+# DNS to complete a certificate challenge, so it cannot be exercised on a LAN box. The app
+# is exposed directly instead.
+#
+#   docker compose -p xeon-cms -f docker-compose.dev.yml up -d --build
+#
+# Pass -p so the containers, network and volumes cannot collide with anything else already
+# running on the host. APP_PORT and DB_PORT move the published ports if those are taken.
+#
+# The database port is published so the app can also be run from a workstation against it.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: xeon
+      POSTGRES_USER: xeon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-xeon-dev-password}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xeon -d xeon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: >-
+        Host=db;Port=5432;Database=xeon;Username=xeon;Password=${POSTGRES_PASSWORD:-xeon-dev-password}
+
+      # Nothing is terminating TLS in front of this stack.
+      Hosting__UseHttpsRedirection: "false"
+
+      Media__StorageRoot: /app/media
+      DataProtection__KeysPath: /app/keys
+
+      Seed__AdminEmail: ${ADMIN_EMAIL:-admin@localhost}
+      Seed__AdminPassword: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      Seed__AdminDisplayName: ${ADMIN_NAME:-Brandon}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - dev-media-data:/app/media
+      - dev-keys-data:/app/keys
+
+volumes:
+  dev-db-data:
+  dev-media-data:
+  dev-keys-data:

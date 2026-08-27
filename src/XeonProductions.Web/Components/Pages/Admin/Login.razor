@@ -1,0 +1,133 @@
+@page "/admin/login"
+@layout Layout.EmptyLayout
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+@inject ISiteSettingsService SettingsService
+@inject NavigationManager Nav
+@inject ILogger<Login> Logger
+
+@*
+    Static server rendering on purpose. Signing in writes an auth cookie, which needs a live
+    HttpContext; an interactive circuit has already sent its headers by then.
+*@
+
+<PageTitle>Sign in</PageTitle>
+
+<HeadContent>
+    <link rel="stylesheet" href="@Assets["admin.css"]" />
+    <meta name="robots" content="noindex,nofollow" />
+</HeadContent>
+
+<div class="login-screen">
+    <div class="login-card">
+        <h1>@_siteTitle</h1>
+        <p class="sub">Sign in to manage the site.</p>
+
+        @if (_error is not null)
+        {
+            <div class="notice notice-error" role="alert">@_error</div>
+        }
+
+        <EditForm Model="Model" OnValidSubmit="SignInAsync" FormName="login" method="post">
+            <DataAnnotationsValidator />
+
+            <div class="field">
+                <label for="login-email">Email</label>
+                <InputText id="login-email" @bind-Value="Model.Email"
+                           autocomplete="username" type="email" />
+                <ValidationMessage For="() => Model.Email" />
+            </div>
+
+            <div class="field">
+                <label for="login-password">Password</label>
+                <InputText id="login-password" @bind-Value="Model.Password"
+                           type="password" autocomplete="current-password" />
+                <ValidationMessage For="() => Model.Password" />
+            </div>
+
+            <div class="checkbox-row">
+                <InputCheckbox id="login-remember" @bind-Value="Model.RememberMe" />
+                <label for="login-remember">Keep me signed in</label>
+            </div>
+
+            <button class="btn" type="submit">Sign in</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    // The bound property carries no initializer: binding a form post replaces it wholesale,
+    // so an initializer would simply be discarded (BL0008). Everything else reads Model,
+    // which fills one in on first use.
+    [SupplyParameterFromForm(FormName = "login")]
+    private LoginModel? Input { get; set; }
+
+    private LoginModel Model => Input ??= new();
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private string? _error;
+    private string _siteTitle = "Sign in";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _siteTitle = (await SettingsService.GetAsync()).SiteTitle;
+    }
+
+    private async Task SignInAsync()
+    {
+        var result = await SignInManager.PasswordSignInAsync(
+            Model.Email, Model.Password, Model.RememberMe, lockoutOnFailure: true);
+
+        if (result.Succeeded)
+        {
+            var user = await UserManager.FindByEmailAsync(Model.Email);
+            if (user is not null)
+            {
+                user.LastLoginAt = DateTimeOffset.UtcNow;
+                await UserManager.UpdateAsync(user);
+            }
+
+            Nav.NavigateTo(SafeReturnUrl(), forceLoad: true);
+            return;
+        }
+
+        if (result.IsLockedOut)
+        {
+            _error = "That account is locked for a few minutes after too many failed attempts.";
+            Logger.LogWarning("Lockout triggered for {Email}.", Model.Email);
+            return;
+        }
+
+        // Deliberately vague: do not reveal whether the address exists.
+        _error = "That email and password combination was not recognised.";
+        Logger.LogInformation("Failed sign-in for {Email}.", Model.Email);
+    }
+
+    /// <summary>
+    /// Only site-relative paths are honoured, so the parameter cannot be used to bounce a
+    /// visitor to another host after signing in.
+    /// </summary>
+    private string SafeReturnUrl()
+    {
+        if (string.IsNullOrWhiteSpace(ReturnUrl)) return "/admin";
+        if (!ReturnUrl.StartsWith('/') || ReturnUrl.StartsWith("//")) return "/admin";
+        if (ReturnUrl.StartsWith("/admin/login", StringComparison.OrdinalIgnoreCase)) return "/admin";
+
+        return ReturnUrl;
+    }
+
+    private sealed class LoginModel
+    {
+        [Required, EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        public string Password { get; set; } = string.Empty;
+
+        public bool RememberMe { get; set; } = true;
+    }
+}

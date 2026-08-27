@@ -1,0 +1,335 @@
+@page "/admin/settings"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "AdminOnly")]
+@inject ISiteSettingsService SettingsService
+@inject INavigationService Navigation
+
+<PageTitle>Settings</PageTitle>
+
+<AdminShell Title="Settings" Subtitle="Identity, theme and behaviour">
+    <Actions>
+        <button class="btn" @onclick="SaveAsync" disabled="@_saving">
+            @(_saving ? "Saving..." : "Save settings")
+        </button>
+    </Actions>
+
+    <ChildContent>
+        @if (_message is not null)
+        {
+            <div class="notice notice-success" role="status">@_message</div>
+        }
+
+        <div class="editor-grid">
+            <div class="editor-main">
+                <div class="admin-card">
+                    <h2>Site identity</h2>
+
+                    <div class="field">
+                        <label for="s-title">Site title</label>
+                        <input id="s-title" @bind="_settings.SiteTitle" />
+                    </div>
+
+                    <div class="field">
+                        <label for="s-tagline">Tagline</label>
+                        <input id="s-tagline" @bind="_settings.Tagline" />
+                    </div>
+
+                    <div class="field">
+                        <label for="s-url">Site URL</label>
+                        <input id="s-url" @bind="_settings.SiteUrl" placeholder="https://xeonproductions.com" />
+                        <span class="field-hint">
+                            Used for canonical tags, the feed and the sitemap. No trailing slash.
+                        </span>
+                    </div>
+
+                    <MediaUrlPicker Label="Logo (light theme)"
+                                    @bind-Value="_settings.LogoUrl"
+                                    Hint="Shown on the light theme, and on both if no dark version is set. Leave blank to show the title as text." />
+
+                    <MediaUrlPicker Label="Logo (dark theme)"
+                                    @bind-Value="_settings.LogoUrlDark"
+                                    Hint="Optional. Used only when the dark theme is active. Leave blank to use the light one everywhere." />
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="s-logo-height">Logo height (px)</label>
+                            <input id="s-logo-height" type="number" min="24" max="320"
+                                   @bind="_settings.LogoMaxHeight" />
+                            <span class="field-hint">
+                                Width follows the image's own proportions, so a wide banner
+                                stays wide. Reduced automatically on small screens.
+                            </span>
+                        </div>
+                        <div class="field">
+                            <label for="s-header-layout">Header layout</label>
+                            <select id="s-header-layout" @bind="_settings.HeaderLayout">
+                                <option value="@HeaderLayout.LogoLeft">Logo left, navigation below</option>
+                                <option value="@HeaderLayout.Centered">Logo centred, navigation centred</option>
+                                <option value="@HeaderLayout.Banner">Full width banner</option>
+                            </select>
+                            <span class="field-hint">
+                                Banner draws the logo across the whole container and ignores
+                                the height above.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="s-show-tagline" @bind="_settings.ShowTagline" />
+                        <label for="s-show-tagline">Show the tagline in the header</label>
+                    </div>
+
+                    <MediaUrlPicker Label="Favicon"
+                                    @bind-Value="_settings.FaviconUrl"
+                                    Hint="Shown in the browser tab. A square PNG or an .ico file." />
+
+                    <div class="field">
+                        <label for="s-footer">Footer text</label>
+                        <input id="s-footer" @bind="_settings.FooterText" />
+                    </div>
+                </div>
+
+                <div class="admin-card">
+                    <h2>Theme</h2>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="s-accent">Accent colour</label>
+                            <input id="s-accent" @bind="_settings.AccentColor" placeholder="#1e73be" />
+                            <span class="field-hint">Hex only, for example #1e73be.</span>
+                        </div>
+                        <div class="field">
+                            <label for="s-pagebg">Page background</label>
+                            <input id="s-pagebg" @bind="_settings.PageBackground" placeholder="#f7f8f9" />
+                            <span class="field-hint">
+                                Behind the content column, in the light theme. Hex only.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="s-width">Content width (px)</label>
+                            <input id="s-width" type="number" @bind="_settings.ContentWidth" />
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="s-sidebar-width">Sidebar width (%)</label>
+                            <input id="s-sidebar-width" type="number" @bind="_settings.SidebarWidth" />
+                        </div>
+                        <div class="field">
+                            <label for="s-fontsize">Body font size (px)</label>
+                            <input id="s-fontsize" type="number" @bind="_settings.BodyFontSize" />
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="s-bodyfont">Body font</label>
+                            <input id="s-bodyfont" @bind="_settings.BodyFont"
+                                   placeholder="system-ui" />
+                        </div>
+                        <div class="field">
+                            <label for="s-headfont">Heading font</label>
+                            <input id="s-headfont" @bind="_settings.HeadingFont"
+                                   placeholder="system-ui" />
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="s-container">Container style</label>
+                            <select id="s-container" @bind="_settings.ContainerStyle">
+                                <option value="@ContainerStyle.Separate">Separate cards per entry</option>
+                                <option value="@ContainerStyle.One">One container for content and sidebar</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="s-sticky-spacer">&nbsp;</label>
+                            <div class="checkbox-row" style="margin-top:10px">
+                                <input type="checkbox" id="s-sticky-spacer" @bind="_settings.StickyHeader" />
+                                <label for="s-sticky-spacer">Pin the navigation bar</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="s-blog-sidebar">Blog and archive layout</label>
+                            <select id="s-blog-sidebar" @bind="_settings.BlogSidebar">
+                                <option value="@SidebarLayout.RightSidebar">Sidebar on the right</option>
+                                <option value="@SidebarLayout.LeftSidebar">Sidebar on the left</option>
+                                <option value="@SidebarLayout.NoSidebar">No sidebar</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="s-post-sidebar">Single post layout</label>
+                            <select id="s-post-sidebar" @bind="_settings.PostSidebar">
+                                <option value="@SidebarLayout.RightSidebar">Sidebar on the right</option>
+                                <option value="@SidebarLayout.LeftSidebar">Sidebar on the left</option>
+                                <option value="@SidebarLayout.NoSidebar">No sidebar</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="s-toggle" @bind="_settings.ShowThemeToggle" />
+                        <label for="s-toggle">Show the light and dark theme switch</label>
+                    </div>
+                </div>
+
+                <div class="admin-card">
+                    <h2>Search engines</h2>
+
+                    <div class="field">
+                        <label for="s-suffix">Title suffix</label>
+                        <input id="s-suffix" @bind="_settings.SeoTitleSuffix"
+                               placeholder="Defaults to a dash and the site title" />
+                    </div>
+
+                    <div class="field">
+                        <label for="s-desc">Default meta description</label>
+                        <textarea id="s-desc" @bind="_settings.DefaultMetaDescription" rows="2"></textarea>
+                    </div>
+
+                    <MediaUrlPicker Label="Default social image"
+                                    @bind-Value="_settings.DefaultSocialImageUrl"
+                                    Hint="Used when a post has no image of its own. Around 1200x630 works best." />
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="s-visible" @bind="_settings.SearchEngineVisible" />
+                        <label for="s-visible">Allow search engines to index this site</label>
+                    </div>
+
+                    <div class="field">
+                        <label for="s-analytics">Analytics snippet</label>
+                        <textarea id="s-analytics" @bind="_settings.AnalyticsScript" rows="4"
+                                  spellcheck="false"></textarea>
+                        <span class="field-hint">
+                            Injected before the closing body tag. The page nonce is applied
+                            automatically so the content security policy does not block it.
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="editor-sidebar">
+                <div class="admin-card">
+                    <h2>Content</h2>
+
+                    <div class="field">
+                        <label for="s-perpage">Posts per page</label>
+                        <input id="s-perpage" type="number" @bind="_settings.PostsPerPage" />
+                    </div>
+
+                    <div class="field">
+                        <label for="s-dateformat">Date format</label>
+                        <input id="s-dateformat" @bind="_settings.DateFormat" />
+                        <span class="field-hint">.NET format string, for example MMMM d, yyyy.</span>
+                    </div>
+
+                    <div class="field">
+                        <label for="s-blogdisplay">Blog index shows</label>
+                        <select id="s-blogdisplay" @bind="_settings.BlogContentDisplay">
+                            <option value="@BlogContentDisplay.FullContent">Full posts</option>
+                            <option value="@BlogContentDisplay.Excerpt">Excerpt and a read-more link</option>
+                        </select>
+                        <span class="field-hint">
+                            Applies to the front page and every archive.
+                        </span>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="s-reading" @bind="_settings.ShowReadingTime" />
+                        <label for="s-reading">Show estimated reading time</label>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="s-authorbox" @bind="_settings.ShowAuthorBox" />
+                        <label for="s-authorbox">Show the author box on posts</label>
+                    </div>
+                </div>
+
+                <div class="admin-card">
+                    <h2>Comments</h2>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="s-comments" @bind="_settings.EnableComments" />
+                        <label for="s-comments">Accept comments on posts</label>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="s-moderate" @bind="_settings.ModerateComments" />
+                        <label for="s-moderate">Hold every comment for review</label>
+                    </div>
+                </div>
+
+                <div class="admin-card">
+                    <h2>Contact</h2>
+
+                    <div class="field">
+                        <label for="s-email">Contact email</label>
+                        <input id="s-email" @bind="_settings.ContactEmail" />
+                        <span class="field-hint">
+                            Where the contact form notifies. SMTP itself is configured in
+                            appsettings or the environment.
+                        </span>
+                    </div>
+
+                    <div class="field">
+                        <label for="s-github">GitHub username</label>
+                        <input id="s-github" @bind="_settings.GitHubUsername" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private SiteSettings _settings = new();
+    private bool _saving;
+    private string? _message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // A copy, so an abandoned edit never leaks into the cached instance.
+        var current = await SettingsService.GetAsync();
+        _settings = Clone(current);
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+
+        try
+        {
+            await SettingsService.SaveAsync(_settings);
+
+            // Menus and widgets embed nothing from settings, but the theme block does; both
+            // caches are cheap to rebuild and this keeps the site consistent immediately.
+            Navigation.Invalidate();
+
+            _message = "Settings saved.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static SiteSettings Clone(SiteSettings source)
+    {
+        var copy = new SiteSettings();
+
+        foreach (var prop in typeof(SiteSettings).GetProperties())
+        {
+            if (prop.CanRead && prop.CanWrite) prop.SetValue(copy, prop.GetValue(source));
+        }
+
+        return copy;
+    }
+}

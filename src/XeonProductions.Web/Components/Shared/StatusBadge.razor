@@ -1,0 +1,21 @@
+<span class="badge badge-@Status.ToString().ToLowerInvariant()">@Label</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContentStatus Status { get; set; }
+
+    [Parameter]
+    public DateTimeOffset? PublishedAt { get; set; }
+
+    private string Label => Status switch
+    {
+        // A future date on a published item is really a schedule.
+        ContentStatus.Published when PublishedAt > DateTimeOffset.UtcNow => "Scheduled",
+        ContentStatus.Published => "Published",
+        ContentStatus.Scheduled => "Scheduled",
+        ContentStatus.Draft => "Draft",
+        ContentStatus.Private => "Private",
+        ContentStatus.Archived => "Archived",
+        _ => Status.ToString()
+    };
+}

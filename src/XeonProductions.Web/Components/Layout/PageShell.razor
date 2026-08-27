@@ -1,0 +1,56 @@
+@inject ISiteSettingsService SettingsService
+
+@*
+    The content column and its optional sidebar. Pages own this rather than the layout,
+    because in static SSR a page cannot push state upwards into MainLayout.
+*@
+
+<div id="content" class="site-content @LayoutClass @ContainerClass @(Narrow ? "narrow" : null)">
+    <main class="content-area">
+        @ChildContent
+    </main>
+
+    @if (Resolved is not SidebarLayout.NoSidebar && !Narrow)
+    {
+        <aside class="widget-area" aria-label="Sidebar">
+            <SidebarWidgets />
+        </aside>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Leave null to follow the site default for this context.</summary>
+    [Parameter]
+    public SidebarLayout? Sidebar { get; set; }
+
+    /// <summary>Which site default applies when <see cref="Sidebar"/> is null.</summary>
+    [Parameter]
+    public bool IsSinglePost { get; set; }
+
+    /// <summary>Centred reading column with no sidebar, for contact and utility pages.</summary>
+    [Parameter]
+    public bool Narrow { get; set; }
+
+    private SiteSettings _settings = new();
+
+    private SidebarLayout Resolved =>
+        Sidebar ?? (IsSinglePost ? _settings.PostSidebar : _settings.BlogSidebar);
+
+    private string? ContainerClass =>
+        _settings.ContainerStyle == ContainerStyle.One ? "one-container" : null;
+
+    private string? LayoutClass => Resolved switch
+    {
+        SidebarLayout.NoSidebar => "no-sidebar",
+        SidebarLayout.LeftSidebar => "sidebar-left",
+        _ => null
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await SettingsService.GetAsync();
+    }
+}

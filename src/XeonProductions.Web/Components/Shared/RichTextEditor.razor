@@ -1,0 +1,237 @@
+@using TinyMCE.Blazor
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IMediaService Media
+@inject IJSRuntime JS
+
+@*
+    Two views over one value: a rich text editor for prose, and the raw HTML underneath it.
+
+    Both panes stay mounted and are shown or hidden with CSS. Unmounting the rich pane would
+    tear down and re-create the editor on every toggle, losing undo history and cursor
+    position.
+*@
+
+<div class="rte @(_mode == Mode.Source ? "is-source" : "is-rich")">
+    <div class="rte-modes">
+        <div class="rte-tabs" role="tablist">
+            <button type="button" role="tab" class="rte-tab @(_mode == Mode.Rich ? "active" : null)"
+                    aria-selected="@(_mode == Mode.Rich)" @onclick="() => SwitchAsync(Mode.Rich)">
+                Visual
+            </button>
+            <button type="button" role="tab" class="rte-tab @(_mode == Mode.Source ? "active" : null)"
+                    aria-selected="@(_mode == Mode.Source)" @onclick="() => SwitchAsync(Mode.Source)">
+                HTML
+            </button>
+        </div>
+
+        <span class="rte-note">
+            @(_mode == Mode.Source
+                ? "Edit the markup directly. Sanitised on save."
+                : "Formatting toolbar. Switch to HTML for precise markup.")
+        </span>
+    </div>
+
+    <div class="rte-pane rte-pane-rich">
+        @if (_ready)
+        {
+            <Editor @bind-Value="Working"
+                    ScriptSrc="/lib/tinymce/tinymce.min.js"
+                    LicenseKey="gpl"
+                    Conf="_conf"
+                    ModelEvents="change input undo redo" />
+        }
+        else
+        {
+            <div class="rte-loading">Loading the editor...</div>
+        }
+    </div>
+
+    <div class="rte-pane rte-pane-source">
+        <textarea class="rte-source" spellcheck="false"
+                  value="@Working" @onchange="OnSourceChanged"></textarea>
+    </div>
+</div>
+
+@code {
+    private enum Mode { Rich, Source }
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>Editor height in pixels. Autoresize grows past this as content is added.</summary>
+    [Parameter]
+    public int MinHeight { get; set; } = 480;
+
+    private Mode _mode = Mode.Rich;
+    private bool _ready;
+    private Dictionary<string, object> _conf = [];
+
+    /// <summary>
+    /// The single value both panes edit. Writing to it notifies the parent, so whichever
+    /// pane is in front is the one that owns the content.
+    /// </summary>
+    private string? Working
+    {
+        get => Value;
+        set
+        {
+            if (value == Value) return;
+
+            Value = value;
+            _ = ValueChanged.InvokeAsync(value);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // The skin has to be chosen before the editor starts, and only the browser knows
+        // which theme is in effect, so the first render puts up a placeholder and the
+        // editor is created on the second.
+        var dark = false;
+
+        try
+        {
+            dark = await JS.InvokeAsync<bool>("xeonEditor.prefersDark");
+        }
+        catch (JSException)
+        {
+            // Fall back to the light skin rather than failing to show an editor at all.
+        }
+
+        _conf = await BuildConfigAsync(dark);
+        _ready = true;
+
+        StateHasChanged();
+    }
+
+    private async Task<Dictionary<string, object>> BuildConfigAsync(bool dark)
+    {
+        var images = await LoadImageListAsync();
+
+        return new Dictionary<string, object>
+        {
+            ["base_url"] = "/lib/tinymce",
+            ["skin"] = dark ? "oxide-dark" : "oxide",
+            ["content_css"] = dark ? "dark" : "default",
+
+            ["menubar"] = false,
+            ["branding"] = false,
+            ["promotion"] = false,
+            ["statusbar"] = true,
+            ["resize"] = true,
+
+            ["plugins"] = "advlist anchor autolink autoresize charmap code codesample "
+                          + "fullscreen image link lists media preview quickbars "
+                          + "searchreplace table visualblocks wordcount",
+
+            ["toolbar"] =
+                "undo redo | blocks | bold italic strikethrough | "
+                + "bullist numlist outdent indent | link image media table | "
+                + "codesample blockquote hr | removeformat searchreplace | "
+                + "visualblocks preview fullscreen code",
+
+            ["block_formats"] =
+                "Paragraph=p; Heading 2=h2; Heading 3=h3; Heading 4=h4; Preformatted=pre",
+
+            ["autoresize_bottom_margin"] = 24,
+            ["min_height"] = MinHeight,
+            ["max_height"] = 900,
+
+            // Everything the author writes is sanitised server-side on save, so the editor
+            // does not need to police markup as well. Being permissive here is what keeps
+            // imported WordPress content and its code blocks intact through a round trip.
+            ["valid_elements"] = "*[*]",
+            ["verify_html"] = false,
+            ["entity_encoding"] = "raw",
+
+            // Leave URLs exactly as written. TinyMCE rewrites them by default, which would
+            // undo the relative links the importer just spent a pass creating.
+            ["convert_urls"] = false,
+
+            // Matches what the server-side highlighter understands.
+            ["codesample_languages"] = new object[]
+            {
+                new Dictionary<string, string> { ["text"] = "C#", ["value"] = "csharp" },
+                new Dictionary<string, string> { ["text"] = "C", ["value"] = "c" },
+                new Dictionary<string, string> { ["text"] = "C++", ["value"] = "cpp" },
+                new Dictionary<string, string> { ["text"] = "PHP", ["value"] = "php" },
+                new Dictionary<string, string> { ["text"] = "Shell", ["value"] = "bash" },
+                new Dictionary<string, string> { ["text"] = "JavaScript", ["value"] = "javascript" },
+                new Dictionary<string, string> { ["text"] = "TypeScript", ["value"] = "typescript" },
+                new Dictionary<string, string> { ["text"] = "SQL", ["value"] = "sql" },
+                new Dictionary<string, string> { ["text"] = "JSON", ["value"] = "json" },
+                new Dictionary<string, string> { ["text"] = "XML", ["value"] = "xml" },
+                new Dictionary<string, string> { ["text"] = "HTML", ["value"] = "html" },
+                new Dictionary<string, string> { ["text"] = "CSS", ["value"] = "css" },
+                new Dictionary<string, string> { ["text"] = "Python", ["value"] = "python" },
+                new Dictionary<string, string> { ["text"] = "PowerShell", ["value"] = "powershell" }
+            },
+
+            // Drag or paste an image and it lands in the media library.
+            ["images_upload_url"] = "/admin/api/media/upload",
+            ["images_upload_credentials"] = true,
+            ["automatic_uploads"] = true,
+            ["image_caption"] = true,
+            ["image_advtab"] = true,
+            ["image_list"] = images,
+
+            ["quickbars_insert_toolbar"] = false,
+            ["quickbars_selection_toolbar"] = "bold italic | quicklink h2 h3 blockquote",
+
+            ["link_default_protocol"] = "https",
+            ["browser_spellcheck"] = true,
+            ["contextmenu"] = "link image table"
+        };
+    }
+
+    /// <summary>Feeds the image dialog a dropdown of what is already in the media library.</summary>
+    private async Task<object[]> LoadImageListAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            var items = await db.Media.AsNoTracking()
+                .Where(m => m.ContentType.StartsWith("image/"))
+                .OrderByDescending(m => m.UploadedAt)
+                .Take(100)
+                .Select(m => new { m.FileName, m.RelativePath })
+                .ToListAsync();
+
+            return items
+                .Select(object (m) => new Dictionary<string, string>
+                {
+                    ["title"] = m.FileName,
+                    ["value"] = Media.PublicUrl(m.RelativePath)
+                })
+                .ToArray();
+        }
+        catch
+        {
+            // The dropdown is a convenience; the editor must open regardless.
+            return [];
+        }
+    }
+
+    private async Task SwitchAsync(Mode mode)
+    {
+        if (_mode == mode) return;
+
+        _mode = mode;
+        await Task.CompletedTask;
+    }
+
+    private async Task OnSourceChanged(ChangeEventArgs e)
+    {
+        var html = e.Value?.ToString();
+        if (html == Value) return;
+
+        Value = html;
+        await ValueChanged.InvokeAsync(html);
+    }
+}

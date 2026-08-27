@@ -1,0 +1,56 @@
+@inject IHtmlService Html
+
+@*
+    The byline under an entry title: when it was published, and by whom.
+
+    Categories and tags deliberately live at the foot of the entry instead, which is where
+    the old theme put them and where they read as a closing note rather than a headline.
+*@
+
+<div class="entry-meta">
+    @if (Post.PublishedAt is DateTimeOffset published)
+    {
+        <time datetime="@published.ToString("o")">@SiteTime.ToSiteTime(published).ToString(DateFormat)</time>
+    }
+
+    @if (Post.Author is not null)
+    {
+        <span class="sep">|</span>
+        <span>
+            by
+            @if (!string.IsNullOrWhiteSpace(Post.Author.Slug))
+            {
+                <a href="/author/@Post.Author.Slug">@AuthorName</a>
+            }
+            else
+            {
+                @AuthorName
+            }
+        </span>
+    }
+
+    @if (ShowReadingTime)
+    {
+        <span class="sep">|</span>
+        <span>@Html.EstimateReadingMinutes(Post.ContentHtml) min read</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Post Post { get; set; } = default!;
+
+    /// <summary>
+    /// A .NET date format string. Callers must pass this with an @ prefix: on a string
+    /// parameter a quoted value is a literal, not an expression, and the literal would be
+    /// read as the format itself.
+    /// </summary>
+    [Parameter]
+    public string DateFormat { get; set; } = "MMMM d, yyyy";
+
+    [Parameter]
+    public bool ShowReadingTime { get; set; } = true;
+
+    private string AuthorName =>
+        Post.Author?.DisplayName ?? Post.Author?.UserName ?? "Unknown";
+}

@@ -1,0 +1,69 @@
+@inject IHtmlService Html
+@inject IMediaService Media
+@inject IContentRenderer Renderer
+
+@*
+    One entry in a listing. Depending on the site setting this is either a summary with a
+    link through, or the whole post rendered inline the way a classic weblog reads.
+*@
+
+<article class="entry @(IsFull ? "entry-full" : "entry-summary")">
+    @if (Post.FeaturedImage is not null)
+    {
+        <a class="entry-image" href="@Permalink" tabindex="-1" aria-hidden="true">
+            <img src="@Media.ThumbnailUrl(Post.FeaturedImage)"
+                 alt="@(Post.FeaturedImage.AltText ?? string.Empty)"
+                 loading="lazy"
+                 width="@Post.FeaturedImage.Width" height="@Post.FeaturedImage.Height" />
+        </a>
+    }
+
+    <header class="entry-header">
+        <h2 class="entry-title"><a href="@Permalink">@Post.Title</a></h2>
+        <PostMeta Post="Post" DateFormat="@DateFormat" ShowReadingTime="ShowReadingTime" />
+    </header>
+
+    @if (IsFull)
+    {
+        <div class="entry-content">
+            @((MarkupString)_rendered)
+        </div>
+
+        <EntryTerms Post="Post" />
+    }
+    else
+    {
+        <div class="entry-content">
+            <p>@(Post.Excerpt ?? Html.BuildExcerpt(Post.ContentHtml))</p>
+            <a class="read-more" href="@Permalink">
+                Continue reading<span class="screen-reader-text"> @Post.Title</span> &raquo;
+            </a>
+        </div>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired]
+    public Post Post { get; set; } = default!;
+
+    [Parameter]
+    public BlogContentDisplay Display { get; set; } = BlogContentDisplay.FullContent;
+
+    [Parameter]
+    public bool ShowReadingTime { get; set; } = true;
+
+    [Parameter]
+    public string DateFormat { get; set; } = "MMMM d, yyyy";
+
+    private string _rendered = string.Empty;
+
+    private bool IsFull => Display == BlogContentDisplay.FullContent;
+
+    private string Permalink => FeedEndpoints.PermalinkFor(Post.PublishedAt, Post.Slug);
+
+    protected override void OnParametersSet()
+    {
+        // Only pay for highlighting and heading anchors when the body is actually shown.
+        _rendered = IsFull ? Renderer.Render(Post.ContentHtml) : string.Empty;
+    }
+}

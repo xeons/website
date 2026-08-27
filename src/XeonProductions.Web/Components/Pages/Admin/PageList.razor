@@ -1,0 +1,114 @@
+@page "/admin/pages"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject AdminContentService Admin
+
+<PageTitle>Pages</PageTitle>
+
+<AdminShell Title="Pages" Subtitle="@($"{_flat.Count} total")">
+    <Actions>
+        <a class="btn" href="/admin/pages/new">New page</a>
+    </Actions>
+
+    <ChildContent>
+        @if (_deleteTarget is not null)
+        {
+            <div class="notice notice-warning">
+                Delete "@_deleteTarget.Title"? Any child pages move up to its parent.
+                <button class="btn btn-danger btn-sm" style="margin-left:10px"
+                        @onclick="ConfirmDeleteAsync">Yes, delete</button>
+                <button class="btn btn-secondary btn-sm"
+                        @onclick="() => _deleteTarget = null">Cancel</button>
+            </div>
+        }
+
+        @if (_flat.Count == 0)
+        {
+            <div class="empty-state">No pages yet.</div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Template</th>
+                            <th>Order</th>
+                            <th class="col-actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (node, depth, path) in _flat)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="row-title" style="padding-left:@(depth * 18)px">
+                                        @(depth > 0 ? "- " : string.Empty)@node.Title
+                                    </div>
+                                    <div class="row-sub" style="padding-left:@(depth * 18)px">@path</div>
+                                </td>
+                                <td><StatusBadge Status="node.Status" PublishedAt="node.PublishedAt" /></td>
+                                <td class="row-sub">@node.Template</td>
+                                <td class="row-sub">@node.MenuOrder</td>
+                                <td class="col-actions">
+                                    <a class="btn btn-secondary btn-sm" href="/admin/pages/@node.Id">Edit</a>
+                                    @if (node.Status == ContentStatus.Published)
+                                    {
+                                        <a class="btn btn-secondary btn-sm" target="_blank"
+                                           rel="noopener" href="@path">View</a>
+                                    }
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => _deleteTarget = node">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private List<(Page Page, int Depth, string Path)> _flat = [];
+    private Page? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var all = await db.Pages.AsNoTracking()
+            .OrderBy(p => p.MenuOrder).ThenBy(p => p.Title)
+            .ToListAsync();
+
+        // Flatten the tree once, in memory: a page tree is tiny and a recursive query is not
+        // worth the complexity here.
+        _flat = [];
+        Walk(all, null, 0, string.Empty);
+    }
+
+    private void Walk(List<Page> all, int? parentId, int depth, string parentPath)
+    {
+        foreach (var page in all.Where(p => p.ParentId == parentId))
+        {
+            var path = $"{parentPath}/{page.Slug}";
+            _flat.Add((page, depth, path));
+            Walk(all, page.Id, depth + 1, path);
+        }
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null) return;
+
+        await Admin.DeletePageAsync(_deleteTarget.Id);
+        _deleteTarget = null;
+        await LoadAsync();
+    }
+}

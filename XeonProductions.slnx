@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/XeonProductions.Domain/XeonProductions.Domain.csproj" />
+    <Project Path="src/XeonProductions.Infrastructure/XeonProductions.Infrastructure.csproj" />
+    <Project Path="src/XeonProductions.Web/XeonProductions.Web.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/XeonProductions.WpImporter/XeonProductions.WpImporter.csproj" />
+  </Folder>
+</Solution>

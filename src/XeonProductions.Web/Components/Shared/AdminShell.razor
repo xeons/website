@@ -1,0 +1,37 @@
+@*
+    Topbar plus content region for an admin screen. Keeps every page consistent without
+    repeating the markup.
+*@
+
+<div class="admin-topbar">
+    <div>
+        <h1>@Title</h1>
+        @if (!string.IsNullOrWhiteSpace(Subtitle))
+        {
+            <div class="row-sub">@Subtitle</div>
+        }
+    </div>
+
+    @if (Actions is not null)
+    {
+        <div class="actions">@Actions</div>
+    }
+</div>
+
+<div class="admin-body">
+    @ChildContent
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Subtitle { get; set; }
+
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+
+    [Parameter, EditorRequired]
+    public RenderFragment? ChildContent { get; set; }
+}

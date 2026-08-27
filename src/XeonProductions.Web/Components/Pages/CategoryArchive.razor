@@ -1,0 +1,50 @@
+@page "/category/{Slug}"
+@page "/category/{Slug}/page/{PageNumber:int}"
+@inject IContentService Content
+@inject ISiteSettingsService SettingsService
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+
+@if (_category is not null)
+{
+    <SeoHead Title="@_category.Name"
+             Description="@(_category.Description ?? $"Posts filed under {_category.Name}.")"
+             NoIndex="PageNumber > 1"
+             Canonical="@CanonicalPath" />
+
+    <PageShell>
+        <ArchiveView Heading="@_category.Name"
+                     Description="@_category.Description"
+                     Result="_result"
+                     BasePath="@($"/category/{Slug}")" />
+    </PageShell>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+    [Parameter] public int PageNumber { get; set; } = 1;
+
+    private Category? _category;
+    private PagedResult<Post> _result = new([], 1, 10, 0);
+
+    private string CanonicalPath =>
+        PageNumber > 1 ? $"/category/{Slug}/page/{PageNumber}" : $"/category/{Slug}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            _category = await db.Categories.AsNoTracking().FirstOrDefaultAsync(c => c.Slug == Slug);
+        }
+
+        if (_category is null)
+        {
+            Nav.NotFound();
+            return;
+        }
+
+        var settings = await SettingsService.GetAsync();
+        _result = await Content.GetPostsByCategoryAsync(
+            Slug, PageNumber <= 0 ? 1 : PageNumber, settings.PostsPerPage);
+    }
+}

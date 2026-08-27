@@ -1,0 +1,145 @@
+@page "/admin"
+@layout Layout.AdminLayout
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<PageTitle>Dashboard</PageTitle>
+
+<AdminShell Title="Dashboard" Subtitle="@_subtitle">
+    <Actions>
+        <a class="btn" href="/admin/posts/new">New post</a>
+        <a class="btn btn-secondary" href="/admin/pages/new">New page</a>
+    </Actions>
+
+    <ChildContent>
+        <div class="stat-grid">
+            <div class="stat">
+                <a href="/admin/posts">
+                    <div class="value">@_publishedPosts</div>
+                    <div class="label">Published posts</div>
+                </a>
+            </div>
+            <div class="stat">
+                <a href="/admin/posts?status=Draft">
+                    <div class="value">@_draftPosts</div>
+                    <div class="label">Drafts</div>
+                </a>
+            </div>
+            <div class="stat">
+                <a href="/admin/pages">
+                    <div class="value">@_pages</div>
+                    <div class="label">Pages</div>
+                </a>
+            </div>
+            <div class="stat">
+                <a href="/admin/media">
+                    <div class="value">@_media</div>
+                    <div class="label">Media items</div>
+                </a>
+            </div>
+            <div class="stat">
+                <a href="/admin/comments">
+                    <div class="value">@_pendingComments</div>
+                    <div class="label">Comments awaiting review</div>
+                </a>
+            </div>
+            <div class="stat">
+                <a href="/admin/messages">
+                    <div class="value">@_unreadMessages</div>
+                    <div class="label">Unread messages</div>
+                </a>
+            </div>
+        </div>
+
+        <div class="admin-card">
+            <h2>Recently updated</h2>
+
+            @if (_recent.Count == 0)
+            {
+                <div class="empty-state">Nothing has been written yet.</div>
+            }
+            else
+            {
+                <div class="table-scroll">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Status</th>
+                                <th>Updated</th>
+                                <th class="col-actions"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _recent)
+                            {
+                                <tr>
+                                    <td class="row-title">@item.Title</td>
+                                    <td><StatusBadge Status="item.Status" PublishedAt="item.PublishedAt" /></td>
+                                    <td class="row-sub">@item.UpdatedAt.ToLocalTime().ToString("d MMM yyyy, HH:mm")</td>
+                                    <td class="col-actions">
+                                        <a class="btn btn-secondary btn-sm" href="/admin/posts/@item.Id">Edit</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        @if (_scheduled.Count > 0)
+        {
+            <div class="admin-card">
+                <h2>Scheduled to publish</h2>
+                <ul>
+                    @foreach (var item in _scheduled)
+                    {
+                        <li>
+                            <a href="/admin/posts/@item.Id">@item.Title</a>
+                            <span class="row-sub">
+                                goes live @item.PublishedAt?.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                            </span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private int _publishedPosts, _draftPosts, _pages, _media, _pendingComments, _unreadMessages;
+    private List<Post> _recent = [];
+    private List<Post> _scheduled = [];
+    private string _subtitle = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _publishedPosts = await db.Posts.CountAsync(p => p.Status == ContentStatus.Published && p.PublishedAt <= now);
+        _draftPosts = await db.Posts.CountAsync(p => p.Status == ContentStatus.Draft);
+        _pages = await db.Pages.CountAsync();
+        _media = await db.Media.CountAsync();
+        _pendingComments = await db.Comments.CountAsync(c => c.Status == CommentStatus.Pending);
+        _unreadMessages = await db.ContactMessages.CountAsync(m => !m.IsRead && !m.IsArchived && !m.IsSpam);
+
+        _recent = await db.Posts.AsNoTracking()
+            .OrderByDescending(p => p.UpdatedAt)
+            .Take(8)
+            .ToListAsync();
+
+        _scheduled = await db.Posts.AsNoTracking()
+            .Where(p => p.PublishedAt > now
+                     && (p.Status == ContentStatus.Scheduled || p.Status == ContentStatus.Published))
+            .OrderBy(p => p.PublishedAt)
+            .Take(5)
+            .ToListAsync();
+
+        var total = _publishedPosts + _draftPosts;
+        _subtitle = $"{total} post{(total == 1 ? "" : "s")}, {_pages} page{(_pages == 1 ? "" : "s")}";
+    }
+}

@@ -1,0 +1,185 @@
+@page "/admin/redirects"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "AdminOnly")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject AdminContentService Admin
+
+<PageTitle>Redirects</PageTitle>
+
+<AdminShell Title="Redirects" Subtitle="@($"{_redirects.Count} rules")">
+    <ChildContent>
+        <div class="notice">
+            Rules are matched before anything else, on the lowercased path with no trailing
+            slash. Use these to keep old WordPress URLs working after a slug changes.
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="notice notice-error" role="alert">@_error</div>
+        }
+
+        <div class="admin-card">
+            <h2>@(_editing.Id == 0 ? "Add a rule" : "Edit rule")</h2>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="r-from">From path</label>
+                    <input id="r-from" @bind="_editing.FromPath" placeholder="/old-page" />
+                    <span class="field-hint">A full URL can be pasted; only the path is kept.</span>
+                </div>
+                <div class="field">
+                    <label for="r-to">To URL</label>
+                    <input id="r-to" @bind="_editing.ToUrl" placeholder="/new-page" />
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="r-code">Type</label>
+                    <select id="r-code" @bind="_editing.StatusCode">
+                        <option value="301">301 permanent</option>
+                        <option value="302">302 temporary</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="r-notes">Note</label>
+                    <input id="r-notes" @bind="_editing.Notes" placeholder="Why this exists" />
+                </div>
+            </div>
+
+            <div class="checkbox-row">
+                <input type="checkbox" id="r-active" @bind="_editing.IsActive" />
+                <label for="r-active">Active</label>
+            </div>
+
+            <button class="btn" @onclick="SaveAsync">
+                @(_editing.Id == 0 ? "Add rule" : "Save changes")
+            </button>
+
+            @if (_editing.Id != 0)
+            {
+                <button class="btn btn-secondary" @onclick="ResetForm">Cancel</button>
+            }
+        </div>
+
+        @if (_redirects.Count == 0)
+        {
+            <div class="empty-state">No redirects configured.</div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Type</th>
+                            <th>Hits</th>
+                            <th class="col-actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rule in _redirects)
+                        {
+                            <tr>
+                                <td class="row-title">
+                                    @rule.FromPath
+                                    @if (!rule.IsActive)
+                                    {
+                                        <span class="badge badge-draft">off</span>
+                                    }
+                                </td>
+                                <td class="row-sub">@rule.ToUrl</td>
+                                <td class="row-sub">@rule.StatusCode</td>
+                                <td class="row-sub">
+                                    @rule.HitCount
+                                    @if (rule.LastHitAt is not null)
+                                    {
+                                        <div>last @rule.LastHitAt.Value.ToLocalTime().ToString("d MMM yyyy")</div>
+                                    }
+                                </td>
+                                <td class="col-actions">
+                                    <button class="btn btn-secondary btn-sm"
+                                            @onclick="() => Edit(rule)">Edit</button>
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => DeleteAsync(rule.Id)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private List<Redirect> _redirects = [];
+    private Redirect _editing = new() { IsActive = true, StatusCode = 301 };
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _redirects = await db.Redirects.AsNoTracking()
+            .OrderByDescending(r => r.HitCount).ThenBy(r => r.FromPath)
+            .ToListAsync();
+    }
+
+    private void Edit(Redirect rule) =>
+        _editing = new Redirect
+        {
+            Id = rule.Id,
+            FromPath = rule.FromPath,
+            ToUrl = rule.ToUrl,
+            StatusCode = rule.StatusCode,
+            IsActive = rule.IsActive,
+            Notes = rule.Notes
+        };
+
+    private void ResetForm() => _editing = new Redirect { IsActive = true, StatusCode = 301 };
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+
+        var from = AdminContentService.NormalizePath(_editing.FromPath);
+
+        if (from.Length <= 1 || string.IsNullOrWhiteSpace(_editing.ToUrl))
+        {
+            _error = "Both a source path and a destination are required.";
+            return;
+        }
+
+        // A rule pointing at itself would loop forever.
+        if (string.Equals(from, AdminContentService.NormalizePath(_editing.ToUrl),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            _error = "The source and destination are the same, which would loop.";
+            return;
+        }
+
+        try
+        {
+            await Admin.SaveRedirectAsync(_editing);
+            ResetForm();
+            await LoadAsync();
+        }
+        catch (DbUpdateException)
+        {
+            _error = $"A rule for {from} already exists.";
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await Admin.DeleteRedirectAsync(id);
+        if (_editing.Id == id) ResetForm();
+        await LoadAsync();
+    }
+}

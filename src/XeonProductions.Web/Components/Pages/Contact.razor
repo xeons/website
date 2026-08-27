@@ -1,0 +1,186 @@
+@page "/contact"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.RateLimiting
+@attribute [EnableRateLimiting("contact-form")]
+@inject IContentService Content
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IEmailService Email
+@inject ISiteSettingsService SettingsService
+@inject IHttpContextAccessor HttpContextAccessor
+
+<SeoHead Title="@(_page?.Title ?? "Contact")"
+         Description="@(_page?.SeoDescription ?? "Get in touch.")"
+         Canonical="/contact" />
+
+<PageShell Sidebar="SidebarFor(_page?.Template)" Narrow="_page?.Template == PageTemplate.Narrow">
+    <article class="entry">
+        <header class="entry-header">
+            <h1 class="entry-title">@(_page?.Title ?? "Contact")</h1>
+        </header>
+
+        @if (_page is not null && !string.IsNullOrWhiteSpace(_page.ContentHtml))
+        {
+            <div class="entry-content">@((MarkupString)_page.ContentHtml)</div>
+        }
+
+        @if (_sent)
+        {
+            <div class="notice notice-success" role="status">
+                <strong>Thanks - your message is through.</strong>
+                <p>I read everything and reply to most things within a few days.</p>
+            </div>
+        }
+        else
+        {
+            @if (_failed)
+            {
+                <div class="notice notice-error" role="alert">
+                    Something went wrong sending that. Please try again in a moment.
+                </div>
+            }
+
+            <EditForm Model="Model" OnValidSubmit="SubmitAsync" FormName="contact">
+                <DataAnnotationsValidator />
+
+                <div class="field">
+                    <label for="contact-name">Your name</label>
+                    <InputText id="contact-name" @bind-Value="Model.Name" autocomplete="name" />
+                    <ValidationMessage For="() => Model.Name" />
+                </div>
+
+                <div class="field">
+                    <label for="contact-email">Email</label>
+                    <InputText id="contact-email" type="email" @bind-Value="Model.Email"
+                               autocomplete="email" />
+                    <ValidationMessage For="() => Model.Email" />
+                </div>
+
+                <div class="field">
+                    <label for="contact-subject">Subject</label>
+                    <InputText id="contact-subject" @bind-Value="Model.Subject" />
+                </div>
+
+                <div class="field">
+                    <label for="contact-body">Message</label>
+                    <InputTextArea id="contact-body" @bind-Value="Model.Body" rows="8" />
+                    <ValidationMessage For="() => Model.Body" />
+                </div>
+
+                @* Honeypot: invisible to people, irresistible to naive bots. *@
+                <div class="field" aria-hidden="true"
+                     style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden">
+                    <label for="contact-website">Leave this field empty</label>
+                    <InputText id="contact-website" @bind-Value="Model.Website" tabindex="-1"
+                               autocomplete="off" />
+                </div>
+
+                <button class="btn" type="submit">Send message</button>
+            </EditForm>
+        }
+    </article>
+</PageShell>
+
+@code {
+    // The bound property carries no initializer: binding a form post replaces it wholesale,
+    // so an initializer would simply be discarded (BL0008). Everything else reads Model,
+    // which fills one in on first use.
+    [SupplyParameterFromForm(FormName = "contact")]
+    private ContactModel? Input { get; set; }
+
+    private ContactModel Model => Input ??= new();
+
+    private Page? _page;
+    private bool _sent;
+    private bool _failed;
+
+    /// <summary>
+    /// Contact is a real page in the CMS, so its width follows the template chosen there
+    /// rather than being fixed by this component.
+    /// </summary>
+    private static SidebarLayout? SidebarFor(PageTemplate? template) => template switch
+    {
+        PageTemplate.FullWidth or PageTemplate.Landing or PageTemplate.Narrow => SidebarLayout.NoSidebar,
+        _ => null
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _page = await Content.GetPageByPathAsync("contact");
+    }
+
+    private async Task SubmitAsync()
+    {
+        var http = HttpContextAccessor.HttpContext;
+
+        var message = new ContactMessage
+        {
+            Name = Model.Name.Trim(),
+            Email = Model.Email.Trim(),
+            Subject = string.IsNullOrWhiteSpace(Model.Subject) ? null : Model.Subject.Trim(),
+            Body = Model.Body.Trim(),
+            IpAddress = http?.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = Truncate(http?.Request.Headers.UserAgent.ToString(), 500),
+            // A filled honeypot is stored but flagged, so nothing legitimate is ever lost.
+            IsSpam = !string.IsNullOrWhiteSpace(Model.Website)
+        };
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        try
+        {
+            db.ContactMessages.Add(message);
+            await db.SaveChangesAsync();
+        }
+        catch
+        {
+            _failed = true;
+            return;
+        }
+
+        if (!message.IsSpam)
+        {
+            var settings = await SettingsService.GetAsync();
+            var body =
+                $"From: {message.Name} <{message.Email}>\n" +
+                $"Subject: {message.Subject ?? "(none)"}\n" +
+                $"Received: {message.CreatedAt:u}\n\n{message.Body}";
+
+            message.WasEmailed = await Email.SendNotificationAsync(
+                $"[{settings.SiteTitle}] {message.Subject ?? "New contact message"}",
+                body,
+                replyTo: message.Email);
+
+            await db.SaveChangesAsync();
+        }
+
+        _sent = true;
+        // Clear the bound instance so the form renders empty after a successful send.
+        Input = new ContactModel();
+    }
+
+    private static string? Truncate(string? value, int max) =>
+        string.IsNullOrEmpty(value) ? null : value.Length <= max ? value : value[..max];
+
+    private sealed class ContactModel
+    {
+        [Required(ErrorMessage = "Please tell me your name.")]
+        [StringLength(200)]
+        public string Name { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "An email address is needed so I can reply.")]
+        [EmailAddress(ErrorMessage = "That does not look like an email address.")]
+        [StringLength(300)]
+        public string Email { get; set; } = string.Empty;
+
+        [StringLength(300)]
+        public string? Subject { get; set; }
+
+        [Required(ErrorMessage = "The message cannot be empty.")]
+        [StringLength(10000, MinimumLength = 10,
+            ErrorMessage = "Please write at least a sentence or two.")]
+        public string Body { get; set; } = string.Empty;
+
+        /// <summary>Honeypot. Any value here marks the submission as spam.</summary>
+        public string? Website { get; set; }
+    }
+}

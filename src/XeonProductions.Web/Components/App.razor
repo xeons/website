@@ -1,0 +1,95 @@
+@using System.Text.RegularExpressions
+@using XeonProductions.Web.Middleware
+@inject ThemeCssBuilder Theme
+@inject ISiteSettingsService SettingsService
+@inject IHttpContextAccessor HttpContextAccessor
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["XeonProductions.Web.styles.css"]" />
+
+    @* Admin-configurable palette, typography and widths. *@
+    <style>@((MarkupString)_themeCss)</style>
+
+    @if (!string.IsNullOrWhiteSpace(_settings.FaviconUrl))
+    {
+        <link rel="icon" href="@_settings.FaviconUrl" />
+    }
+
+    <link rel="alternate" type="application/rss+xml"
+          title="@($"{_settings.SiteTitle} feed")" href="/feed.xml" />
+
+    @* Applies the stored theme before first paint, so there is no flash of the wrong palette. *@
+    <script nonce="@_nonce">
+        (function () {
+            try {
+                var t = localStorage.getItem('xeon-theme');
+                if (t === 'dark' || t === 'light') {
+                    document.documentElement.setAttribute('data-theme', t);
+                }
+            } catch (e) { /* private mode: fall back to the system preference */ }
+        })();
+    </script>
+
+    <ImportMap />
+    <HeadOutlet />
+</head>
+
+<body>
+    <Routes />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["js/site.js"]"></script>
+    <script src="@Assets["js/editor.js"]"></script>
+
+    @*
+        The TinyMCE Blazor package ships its interop as a JS initializer
+        (_content/TinyMCE.Blazor/TinyMce.Blazor.lib.module.js), which Blazor loads on its
+        own. The manual script tag the cloud documentation shows is for older setups and
+        only 404s here.
+    *@
+
+    @if (_analyticsMarkup is not null)
+    {
+        @((MarkupString)_analyticsMarkup)
+    }
+</body>
+
+</html>
+
+@code {
+    private SiteSettings _settings = new();
+    private string _themeCss = string.Empty;
+    private string? _nonce;
+    private string? _analyticsMarkup;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await SettingsService.GetAsync();
+        _themeCss = await Theme.BuildAsync();
+        _nonce = HttpContextAccessor.HttpContext.GetCspNonce();
+
+        _analyticsMarkup = ApplyNonce(_settings.AnalyticsScript, _nonce);
+    }
+
+    /// <summary>
+    /// The analytics snippet is pasted in by an administrator, so it will not carry this
+    /// request's nonce. Stamp it on, or the CSP silently drops the tag.
+    /// </summary>
+    private static string? ApplyNonce(string? markup, string? nonce)
+    {
+        if (string.IsNullOrWhiteSpace(markup) || string.IsNullOrEmpty(nonce)) return markup;
+
+        return Regex.Replace(
+            markup,
+            "<script(?![^>]*\\bnonce=)",
+            $"<script nonce=\"{nonce}\"",
+            RegexOptions.IgnoreCase);
+    }
+}

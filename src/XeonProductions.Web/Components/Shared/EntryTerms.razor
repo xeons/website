@@ -1,0 +1,52 @@
+@*
+    The categories and tags line that closes an entry, mirroring the structure the old theme
+    used: one span per taxonomy, comma separated links, an icon standing in for the label.
+    The label itself is kept for screen readers, since an icon alone says nothing.
+*@
+
+@if (HasTerms)
+{
+    <footer class="entry-meta entry-terms" aria-label="Entry meta">
+        @if (Post.Categories.Count > 0)
+        {
+            <span class="cat-links">
+                <svg class="term-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                     stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 7a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.6.8l.9 1.2H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                </svg>
+                <span class="screen-reader-text">Categories</span>
+
+                @foreach (var category in Post.Categories.OrderBy(c => c.Name))
+                {
+                    <a href="/category/@category.Slug">@category.Name</a>
+                }
+            </span>
+        }
+
+        @if (Post.Tags.Count > 0)
+        {
+            <span class="tags-links">
+                <svg class="term-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                     stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20.6 13.4 12 4.8V3H4v8h1.8l8.6 8.6a1.4 1.4 0 0 0 2 0l4.2-4.2a1.4 1.4 0 0 0 0-2z" />
+                    <circle cx="7.5" cy="7.5" r="1.2" />
+                </svg>
+                <span class="screen-reader-text">Tags</span>
+
+                @foreach (var tag in Post.Tags.OrderBy(t => t.Name))
+                {
+                    <a href="/tag/@tag.Slug">@tag.Name</a>
+                }
+            </span>
+        }
+    </footer>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Post Post { get; set; } = default!;
+
+    private bool HasTerms => Post.Categories.Count > 0 || Post.Tags.Count > 0;
+}

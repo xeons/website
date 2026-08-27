@@ -1,0 +1,15 @@
+@inject INavigationService Navigation
+
+@foreach (var widget in _widgets)
+{
+    <WidgetView Widget="widget" />
+}
+
+@code {
+    private IReadOnlyList<Widget> _widgets = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _widgets = await Navigation.GetWidgetsAsync(WidgetArea.Sidebar);
+    }
+}

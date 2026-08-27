@@ -1,0 +1,26 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Environment files. .env.example is the template and is meant to be committed.
+.env
+.env.*
+!.env.example
+
+# Data protection key ring. These sign the auth cookies and antiforgery tokens,
+# so they are secrets even though nothing here generates them deliberately.
+keys/
+src/XeonProductions.Web/keys/
+
+# Uploaded media belongs to the running site, not to the source tree.
+src/XeonProductions.Web/media/
+
+# Any environment-specific settings written locally.
+src/XeonProductions.Web/appsettings.Production.json
+**/appsettings.*.local.json
+
+# Caddy state
+deploy/data/

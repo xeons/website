@@ -1,0 +1,33 @@
+@page "/error"
+@using Microsoft.AspNetCore.Diagnostics
+@inject IHttpContextAccessor HttpContextAccessor
+
+<SeoHead Title="Something went wrong" NoIndex="true" />
+
+<PageShell>
+    <article class="entry">
+        <header class="entry-header">
+            <h1 class="entry-title">Something went wrong</h1>
+        </header>
+        <div class="entry-content">
+            <p>The request could not be completed. The error has been logged.</p>
+            @if (_requestId is not null)
+            {
+                <p>
+                    Reference: <code>@_requestId</code>
+                </p>
+            }
+            <p><a href="/">Back to the home page</a></p>
+        </div>
+    </article>
+</PageShell>
+
+@code {
+    private string? _requestId;
+
+    protected override void OnInitialized()
+    {
+        // Surfaced so a reported problem can be tied back to a log entry.
+        _requestId = HttpContextAccessor.HttpContext?.TraceIdentifier;
+    }
+}

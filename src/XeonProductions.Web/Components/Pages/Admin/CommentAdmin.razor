@@ -1,0 +1,135 @@
+@page "/admin/comments"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<PageTitle>Comments</PageTitle>
+
+<AdminShell Title="Comments" Subtitle="@($"{_comments.Count} shown")">
+    <ChildContent>
+        <div class="toolbar">
+            @foreach (var status in Enum.GetValues<CommentStatus>())
+            {
+                <button class="btn @(_filter == status ? "" : "btn-secondary")"
+                        @onclick="() => SetFilterAsync(status)">@status</button>
+            }
+        </div>
+
+        @if (!_commentsEnabled)
+        {
+            <div class="notice notice-warning">
+                Comments are switched off in <a href="/admin/settings">settings</a>, so the form
+                does not appear on posts. Anything already submitted is still listed here.
+            </div>
+        }
+
+        @if (_comments.Count == 0)
+        {
+            <div class="empty-state">No @_filter.ToString().ToLowerInvariant() comments.</div>
+        }
+        else
+        {
+            @foreach (var comment in _comments)
+            {
+                <div class="admin-card">
+                    <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
+                        <div style="min-width:0">
+                            <div class="row-title">@comment.AuthorName</div>
+                            <div class="row-sub">
+                                @comment.AuthorEmail
+                                on @comment.CreatedAt.ToLocalTime().ToString("d MMM yyyy, HH:mm")
+                                @if (comment.Post is not null)
+                                {
+                                    <text>
+                                        &middot;
+                                        <a href="@FeedEndpoints.PermalinkFor(comment.Post.PublishedAt, comment.Post.Slug)"
+                                           target="_blank" rel="noopener">@comment.Post.Title</a>
+                                    </text>
+                                }
+                            </div>
+                        </div>
+
+                        <div style="white-space:nowrap">
+                            @if (comment.Status != CommentStatus.Approved)
+                            {
+                                <button class="btn btn-sm"
+                                        @onclick="() => SetStatusAsync(comment.Id, CommentStatus.Approved)">
+                                    Approve
+                                </button>
+                            }
+                            @if (comment.Status != CommentStatus.Spam)
+                            {
+                                <button class="btn btn-secondary btn-sm"
+                                        @onclick="() => SetStatusAsync(comment.Id, CommentStatus.Spam)">
+                                    Spam
+                                </button>
+                            }
+                            <button class="btn btn-danger btn-sm"
+                                    @onclick="() => DeleteAsync(comment.Id)">Delete</button>
+                        </div>
+                    </div>
+
+                    <p style="white-space:pre-wrap;margin-top:14px">@comment.Body</p>
+                </div>
+            }
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private List<Comment> _comments = [];
+    private CommentStatus _filter = CommentStatus.Pending;
+    private bool _commentsEnabled;
+
+    [Inject]
+    private ISiteSettingsService SettingsService { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _commentsEnabled = (await SettingsService.GetAsync()).EnableComments;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _comments = await db.Comments.AsNoTracking()
+            .Where(c => c.Status == _filter)
+            .Include(c => c.Post)
+            .OrderByDescending(c => c.CreatedAt)
+            .Take(100)
+            .ToListAsync();
+    }
+
+    private async Task SetFilterAsync(CommentStatus status)
+    {
+        _filter = status;
+        await LoadAsync();
+    }
+
+    private async Task SetStatusAsync(int id, CommentStatus status)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        await db.Comments
+            .Where(c => c.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, status));
+
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Replies point at their parent, so detach them before the row goes.
+        await db.Comments
+            .Where(c => c.ParentId == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.ParentId, (int?)null));
+
+        await db.Comments.Where(c => c.Id == id).ExecuteDeleteAsync();
+        await LoadAsync();
+    }
+}

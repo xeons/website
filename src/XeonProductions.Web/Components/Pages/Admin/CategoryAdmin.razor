@@ -1,0 +1,176 @@
+@page "/admin/categories"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject AdminContentService Admin
+
+<PageTitle>Categories</PageTitle>
+
+<AdminShell Title="Categories" Subtitle="@($"{_rows.Count} total")">
+    <ChildContent>
+        @if (_error is not null)
+        {
+            <div class="notice notice-error" role="alert">@_error</div>
+        }
+
+        <div class="admin-card">
+            <h2>@(_editing.Id == 0 ? "Add a category" : $"Edit: {_editing.Name}")</h2>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="cat-name">Name</label>
+                    <input id="cat-name" @bind="_editing.Name" />
+                </div>
+                <div class="field">
+                    <label for="cat-slug">Slug</label>
+                    <input id="cat-slug" @bind="_editing.Slug" placeholder="auto" />
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label for="cat-parent">Parent</label>
+                    <select id="cat-parent" @bind="_parentId">
+                        <option value="0">None</option>
+                        @foreach (var row in _rows.Where(r => r.Category.Id != _editing.Id))
+                        {
+                            <option value="@row.Category.Id">@row.Category.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="cat-order">Sort order</label>
+                    <input id="cat-order" type="number" @bind="_editing.SortOrder" />
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="cat-desc">Description</label>
+                <textarea id="cat-desc" @bind="_editing.Description" rows="2"
+                          style="min-height:auto"></textarea>
+            </div>
+
+            <button class="btn" @onclick="SaveAsync">
+                @(_editing.Id == 0 ? "Add category" : "Save changes")
+            </button>
+
+            @if (_editing.Id != 0)
+            {
+                <button class="btn btn-secondary" @onclick="ResetForm">Cancel</button>
+            }
+        </div>
+
+        @if (_rows.Count == 0)
+        {
+            <div class="empty-state">No categories yet.</div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Slug</th>
+                            <th>Posts</th>
+                            <th class="col-actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="row-title">
+                                        @(row.Category.ParentId is null ? "" : "- ")@row.Category.Name
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(row.Category.Description))
+                                    {
+                                        <div class="row-sub">@row.Category.Description</div>
+                                    }
+                                </td>
+                                <td class="row-sub">/category/@row.Category.Slug</td>
+                                <td class="row-sub">@row.PostCount</td>
+                                <td class="col-actions">
+                                    <button class="btn btn-secondary btn-sm"
+                                            @onclick="() => Edit(row.Category)">Edit</button>
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => DeleteAsync(row.Category.Id)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private record Row(Category Category, int PostCount);
+
+    private List<Row> _rows = [];
+    private Category _editing = new();
+    private int _parentId;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _rows = await db.Categories.AsNoTracking()
+            .OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
+            .Select(c => new Row(c, c.Posts.Count))
+            .ToListAsync();
+    }
+
+    private void Edit(Category category)
+    {
+        // Work on a copy so cancelling leaves the table row untouched.
+        _editing = new Category
+        {
+            Id = category.Id,
+            Name = category.Name,
+            Slug = category.Slug,
+            Description = category.Description,
+            SortOrder = category.SortOrder,
+            ParentId = category.ParentId
+        };
+
+        _parentId = category.ParentId ?? 0;
+    }
+
+    private void ResetForm()
+    {
+        _editing = new Category();
+        _parentId = 0;
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_editing.Name))
+        {
+            _error = "A name is required.";
+            return;
+        }
+
+        _editing.ParentId = _parentId == 0 ? null : _parentId;
+
+        await Admin.SaveCategoryAsync(_editing);
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await Admin.DeleteCategoryAsync(id);
+
+        if (_editing.Id == id) ResetForm();
+        await LoadAsync();
+    }
+}

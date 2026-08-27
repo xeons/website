@@ -1,0 +1,90 @@
+@inherits LayoutComponentBase
+@layout EmptyLayout
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISiteSettingsService SettingsService
+@inject NavigationManager Nav
+
+<HeadContent>
+    <link rel="stylesheet" href="@Assets["admin.css"]" />
+    <meta name="robots" content="noindex,nofollow" />
+</HeadContent>
+
+<div class="admin">
+    <aside class="admin-sidebar">
+        <div class="admin-brand">
+            <strong>@_settings.SiteTitle</strong>
+            <span>Site administration</span>
+        </div>
+
+        <nav class="admin-nav">
+            <NavLink href="/admin" Match="NavLinkMatch.All">Dashboard</NavLink>
+
+            <div class="admin-nav-group">Content</div>
+            <NavLink href="/admin/posts">Posts</NavLink>
+            <NavLink href="/admin/pages">Pages</NavLink>
+            <NavLink href="/admin/media">Media</NavLink>
+            <NavLink href="/admin/categories">Categories</NavLink>
+            <NavLink href="/admin/tags">Tags</NavLink>
+
+            <div class="admin-nav-group">Interaction</div>
+            <NavLink href="/admin/comments">
+                Comments
+                @if (_pendingComments > 0)
+                {
+                    <span class="count">@_pendingComments</span>
+                }
+            </NavLink>
+            <NavLink href="/admin/messages">
+                Messages
+                @if (_unreadMessages > 0)
+                {
+                    <span class="count">@_unreadMessages</span>
+                }
+            </NavLink>
+
+            <div class="admin-nav-group">Appearance</div>
+            <NavLink href="/admin/menus">Menus</NavLink>
+            <NavLink href="/admin/widgets">Widgets</NavLink>
+
+            <div class="admin-nav-group">System</div>
+            <NavLink href="/admin/redirects">Redirects</NavLink>
+            <NavLink href="/admin/users">Users</NavLink>
+            <NavLink href="/admin/settings">Settings</NavLink>
+        </nav>
+
+        <div class="admin-sidebar-footer">
+            <a href="/" target="_blank" rel="noopener">View site</a>
+            <AuthorizeView>
+                <Authorized>
+                    <span>Signed in as @(context.User.Identity?.Name)</span>
+                    <form method="post" action="/admin/logout">
+                        <AntiforgeryToken />
+                        <button class="btn btn-secondary btn-sm" type="submit"
+                                style="margin-top:8px">Sign out</button>
+                    </form>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+    </aside>
+
+    <div class="admin-main">
+        @Body
+    </div>
+</div>
+
+@code {
+    private SiteSettings _settings = new();
+    private int _pendingComments;
+    private int _unreadMessages;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await SettingsService.GetAsync();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Badge counts, so nothing waiting for a decision goes unnoticed.
+        _pendingComments = await db.Comments.CountAsync(c => c.Status == CommentStatus.Pending);
+        _unreadMessages = await db.ContactMessages.CountAsync(m => !m.IsRead && !m.IsArchived && !m.IsSpam);
+    }
+}

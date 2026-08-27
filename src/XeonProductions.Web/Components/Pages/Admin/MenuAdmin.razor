@@ -1,0 +1,222 @@
+@page "/admin/menus"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject AdminContentService Admin
+
+<PageTitle>Menus</PageTitle>
+
+<AdminShell Title="Menus" Subtitle="Header, footer and social navigation">
+    <ChildContent>
+        <div class="toolbar">
+            @foreach (var location in Enum.GetValues<MenuLocation>())
+            {
+                <button class="btn @(_location == location ? "" : "btn-secondary")"
+                        @onclick="() => SwitchAsync(location)">@location</button>
+            }
+        </div>
+
+        @if (_menu is null)
+        {
+            <div class="empty-state">
+                No @_location menu exists yet.
+                <button class="btn" style="margin-left:10px" @onclick="CreateMenuAsync">
+                    Create it
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="admin-card">
+                <h2>@(_editing.Id == 0 ? "Add an item" : $"Edit: {_editing.Label}")</h2>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="mi-label">Label</label>
+                        <input id="mi-label" @bind="_editing.Label" />
+                    </div>
+                    <div class="field">
+                        <label for="mi-url">URL</label>
+                        <input id="mi-url" @bind="_editing.Url"
+                               placeholder="/about or https://example.com" />
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="mi-parent">Parent item</label>
+                        <select id="mi-parent" @bind="_parentId">
+                            <option value="0">None (top level)</option>
+                            @foreach (var candidate in _items.Where(i =>
+                                i.Id != _editing.Id && i.ParentId is null))
+                            {
+                                <option value="@candidate.Id">@candidate.Label</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="mi-order">Sort order</label>
+                        <input id="mi-order" type="number" @bind="_editing.SortOrder" />
+                    </div>
+                </div>
+
+                <div class="checkbox-row">
+                    <input type="checkbox" id="mi-newtab" @bind="_editing.OpenInNewTab" />
+                    <label for="mi-newtab">Open in a new tab</label>
+                </div>
+
+                <button class="btn" @onclick="SaveAsync">
+                    @(_editing.Id == 0 ? "Add item" : "Save changes")
+                </button>
+
+                @if (_editing.Id != 0)
+                {
+                    <button class="btn btn-secondary" @onclick="ResetForm">Cancel</button>
+                }
+            </div>
+
+            @if (_items.Count == 0)
+            {
+                <div class="empty-state">This menu has no items.</div>
+            }
+            else
+            {
+                <div class="table-scroll">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Label</th>
+                                <th>URL</th>
+                                <th>Order</th>
+                                <th class="col-actions"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Ordered())
+                            {
+                                <tr>
+                                    <td class="row-title"
+                                        style="padding-left:@(item.ParentId is null ? 16 : 34)px">
+                                        @(item.ParentId is null ? "" : "- ")@item.Label
+                                    </td>
+                                    <td class="row-sub">
+                                        @item.Url
+                                        @if (item.OpenInNewTab)
+                                        {
+                                            <span class="badge badge-draft">new tab</span>
+                                        }
+                                    </td>
+                                    <td class="row-sub">@item.SortOrder</td>
+                                    <td class="col-actions">
+                                        <button class="btn btn-secondary btn-sm"
+                                                @onclick="() => Edit(item)">Edit</button>
+                                        <button class="btn btn-danger btn-sm"
+                                                @onclick="() => DeleteAsync(item.Id)">Delete</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private MenuLocation _location = MenuLocation.Primary;
+    private Menu? _menu;
+    private List<MenuItem> _items = [];
+    private MenuItem _editing = new();
+    private int _parentId;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _menu = await db.Menus.AsNoTracking().FirstOrDefaultAsync(m => m.Location == _location);
+
+        _items = _menu is null
+            ? []
+            : await db.MenuItems.AsNoTracking()
+                .Where(i => i.MenuId == _menu.Id)
+                .OrderBy(i => i.SortOrder).ThenBy(i => i.Label)
+                .ToListAsync();
+    }
+
+    /// <summary>Lists roots with their children immediately after, so nesting is visible.</summary>
+    private IEnumerable<MenuItem> Ordered()
+    {
+        foreach (var root in _items.Where(i => i.ParentId is null))
+        {
+            yield return root;
+
+            foreach (var child in _items.Where(i => i.ParentId == root.Id))
+            {
+                yield return child;
+            }
+        }
+    }
+
+    private async Task SwitchAsync(MenuLocation location)
+    {
+        _location = location;
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task CreateMenuAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        db.Menus.Add(new Menu { Name = $"{_location} Navigation", Location = _location });
+        await db.SaveChangesAsync();
+
+        await LoadAsync();
+    }
+
+    private void Edit(MenuItem item)
+    {
+        _editing = new MenuItem
+        {
+            Id = item.Id,
+            MenuId = item.MenuId,
+            Label = item.Label,
+            Url = item.Url,
+            SortOrder = item.SortOrder,
+            OpenInNewTab = item.OpenInNewTab,
+            ParentId = item.ParentId
+        };
+
+        _parentId = item.ParentId ?? 0;
+    }
+
+    private void ResetForm()
+    {
+        _editing = new MenuItem();
+        _parentId = 0;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_menu is null) return;
+        if (string.IsNullOrWhiteSpace(_editing.Label) || string.IsNullOrWhiteSpace(_editing.Url)) return;
+
+        _editing.MenuId = _menu.Id;
+        _editing.ParentId = _parentId == 0 ? null : _parentId;
+
+        await Admin.SaveMenuItemAsync(_editing);
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await Admin.DeleteMenuItemAsync(id);
+        if (_editing.Id == id) ResetForm();
+        await LoadAsync();
+    }
+}

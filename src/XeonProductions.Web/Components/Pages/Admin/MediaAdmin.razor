@@ -1,0 +1,255 @@
+@page "/admin/media"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IMediaService Media
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Media</PageTitle>
+
+<AdminShell Title="Media" Subtitle="@($"{_total} files, {FormatSize(_totalBytes)} total")">
+    <ChildContent>
+        <div class="admin-card">
+            <h2>Upload</h2>
+            <InputFile OnChange="UploadAsync" multiple accept="image/*,.pdf,.zip,.txt,.json,.xml,.csv" />
+            <span class="field-hint">
+                Images are downscaled past 2000px wide and get a WebP thumbnail.
+                Up to 25 MB per file.
+            </span>
+
+            @if (_uploading)
+            {
+                <p class="row-sub" style="margin-top:10px">Uploading @_uploadedCount of @_uploadTotal...</p>
+            }
+        </div>
+
+        @if (_errors.Count > 0)
+        {
+            <div class="notice notice-error" role="alert">
+                <strong>Some files were rejected:</strong>
+                <ul>
+                    @foreach (var error in _errors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (_selected is not null)
+        {
+            <div class="admin-card">
+                <h2>@_selected.FileName</h2>
+
+                <div style="display:flex;gap:20px;flex-wrap:wrap">
+                    @if (_selected.IsImage)
+                    {
+                        <img src="@Media.PublicUrl(_selected.RelativePath)" alt=""
+                             style="max-width:260px;border-radius:4px;border:1px solid var(--admin-border)" />
+                    }
+
+                    <div style="flex:1 1 260px;min-width:0">
+                        <div class="field">
+                            <label for="media-alt">Alt text</label>
+                            <input id="media-alt" @bind="_selected.AltText" />
+                            <span class="field-hint">
+                                Describe the image for screen readers and for when it fails to load.
+                            </span>
+                        </div>
+
+                        <div class="field">
+                            <label for="media-caption">Caption</label>
+                            <input id="media-caption" @bind="_selected.Caption" />
+                        </div>
+
+                        <div class="field">
+                            <label for="media-url">URL</label>
+                            <input id="media-url" readonly value="@Media.PublicUrl(_selected.RelativePath)" />
+                        </div>
+
+                        <p class="row-sub">
+                            @_selected.ContentType, @FormatSize(_selected.SizeBytes)
+                            @if (_selected.Width is not null)
+                            {
+                                <text>, @_selected.Width x @_selected.Height</text>
+                            }
+                            , uploaded @_selected.UploadedAt.ToLocalTime().ToString("d MMM yyyy")
+                        </p>
+
+                        <button class="btn" @onclick="SaveDetailsAsync">Save details</button>
+                        <button class="btn btn-secondary" @onclick="() => _selected = null">Close</button>
+                        <button class="btn btn-danger" @onclick="DeleteSelectedAsync">Delete file</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (_items.Count == 0)
+        {
+            <div class="empty-state">Nothing uploaded yet.</div>
+        }
+        else
+        {
+            <div class="media-grid">
+                @foreach (var item in _items)
+                {
+                    <button type="button"
+                            class="media-tile @(item.Id == _selected?.Id ? "selected" : null)"
+                            @onclick="() => Select(item)">
+                        <div class="media-thumb">
+                            @if (item.IsImage)
+                            {
+                                <img src="@Media.ThumbnailUrl(item)" alt="@item.AltText" loading="lazy" />
+                            }
+                            else
+                            {
+                                <span class="file-ext">
+                                    @System.IO.Path.GetExtension(item.FileName).TrimStart('.').ToUpperInvariant()
+                                </span>
+                            }
+                        </div>
+                        <div class="media-meta">
+                            <span class="name">@item.FileName</span>
+                            <span class="size">@FormatSize(item.SizeBytes)</span>
+                        </div>
+                    </button>
+                }
+            </div>
+
+            @if (_items.Count < _total)
+            {
+                <div style="margin-top:18px">
+                    <button class="btn btn-secondary" @onclick="LoadMoreAsync">
+                        Load more (@(_total - _items.Count) remaining)
+                    </button>
+                </div>
+            }
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private const int PageSize = 48;
+
+    private List<MediaItem> _items = [];
+    private MediaItem? _selected;
+    private List<string> _errors = [];
+    private int _total;
+    private long _totalBytes;
+    private bool _uploading;
+    private int _uploadedCount;
+    private int _uploadTotal;
+
+    protected override Task OnInitializedAsync() => LoadAsync(reset: true);
+
+    private async Task LoadAsync(bool reset)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _total = await db.Media.CountAsync();
+        _totalBytes = await db.Media.SumAsync(m => (long?)m.SizeBytes) ?? 0;
+
+        var take = reset ? PageSize : Math.Max(PageSize, _items.Count + PageSize);
+
+        _items = await db.Media.AsNoTracking()
+            .OrderByDescending(m => m.UploadedAt)
+            .Take(take)
+            .ToListAsync();
+    }
+
+    private Task LoadMoreAsync() => LoadAsync(reset: false);
+
+    private void Select(MediaItem item)
+    {
+        // Copy, so editing the fields does not mutate the grid until the save succeeds.
+        _selected = new MediaItem
+        {
+            Id = item.Id,
+            FileName = item.FileName,
+            RelativePath = item.RelativePath,
+            ThumbnailPath = item.ThumbnailPath,
+            ContentType = item.ContentType,
+            SizeBytes = item.SizeBytes,
+            Width = item.Width,
+            Height = item.Height,
+            AltText = item.AltText,
+            Caption = item.Caption,
+            Title = item.Title,
+            UploadedAt = item.UploadedAt
+        };
+    }
+
+    private async Task UploadAsync(InputFileChangeEventArgs e)
+    {
+        _errors = [];
+        _uploading = true;
+        _uploadedCount = 0;
+
+        var files = e.GetMultipleFiles(30);
+        _uploadTotal = files.Count;
+
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        foreach (var file in files)
+        {
+            try
+            {
+                // The default 500 KB cap would reject most screenshots.
+                await using var stream = file.OpenReadStream(25 * 1024 * 1024);
+
+                var result = await Media.SaveAsync(
+                    stream, file.Name, file.ContentType, userId);
+
+                if (!result.Success)
+                {
+                    _errors.Add($"{file.Name}: {result.Error}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _errors.Add($"{file.Name}: {ex.Message}");
+            }
+
+            _uploadedCount++;
+            StateHasChanged();
+        }
+
+        _uploading = false;
+        await LoadAsync(reset: true);
+    }
+
+    private async Task SaveDetailsAsync()
+    {
+        if (_selected is null) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var item = await db.Media.FirstOrDefaultAsync(m => m.Id == _selected.Id);
+        if (item is null) return;
+
+        item.AltText = _selected.AltText;
+        item.Caption = _selected.Caption;
+
+        await db.SaveChangesAsync();
+        await LoadAsync(reset: true);
+    }
+
+    private async Task DeleteSelectedAsync()
+    {
+        if (_selected is null) return;
+
+        await Media.DeleteAsync(_selected.Id);
+        _selected = null;
+        await LoadAsync(reset: true);
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / 1024.0 / 1024:0.#} MB",
+        _ => $"{bytes / 1024.0 / 1024 / 1024:0.##} GB"
+    };
+}

@@ -1,0 +1,52 @@
+@page "/author/{Slug}"
+@page "/author/{Slug}/page/{PageNumber:int}"
+@inject IContentService Content
+@inject ISiteSettingsService SettingsService
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+
+@if (_author is not null)
+{
+    <SeoHead Title="@DisplayName"
+             Description="@(_author.Bio ?? $"Posts written by {DisplayName}.")"
+             NoIndex="PageNumber > 1"
+             Canonical="@CanonicalPath" />
+
+    <PageShell>
+        <ArchiveView Heading="@DisplayName"
+                     Description="@_author.Bio"
+                     Result="_result"
+                     BasePath="@($"/author/{Slug}")" />
+    </PageShell>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+    [Parameter] public int PageNumber { get; set; } = 1;
+
+    private ApplicationUser? _author;
+    private PagedResult<Post> _result = new([], 1, 10, 0);
+
+    private string DisplayName => _author?.DisplayName ?? _author?.UserName ?? "Author";
+
+    private string CanonicalPath =>
+        PageNumber > 1 ? $"/author/{Slug}/page/{PageNumber}" : $"/author/{Slug}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            _author = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Slug == Slug);
+        }
+
+        if (_author is null)
+        {
+            Nav.NotFound();
+            return;
+        }
+
+        var settings = await SettingsService.GetAsync();
+        _result = await Content.GetPostsByAuthorAsync(
+            Slug, PageNumber <= 0 ? 1 : PageNumber, settings.PostsPerPage);
+    }
+}
