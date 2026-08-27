@@ -57,19 +57,26 @@ sentence or two. Prefer no comment to one that restates the line beneath it.
 
 ## File organisation
 
-One type per file, named after the type. Interfaces, classes, records, enums, structs and
-delegates each get their own file.
+One type per file, named after the type. Interfaces, classes, records, structs and delegates
+each get their own file.
 
 - `IDownloadService` goes in `IDownloadService.cs`.
 - `DownloadService` goes in `DownloadService.cs`.
-- An enum used by both goes in its own file next to them.
+- `MediaOptions` and `MediaUploadResult` do not sit alongside `MediaService`.
+
+Enums are the exception. The domain enums live together in `Domain/Enums/Enums.cs`; add new
+ones there rather than creating a file per enum. An enum that belongs to one service and is
+not part of the domain may sit in its own file beside it, as `RequestOrigin` does.
+
+A private nested type stays nested. It is an implementation detail of its owner, not a type
+in its own right.
 
 Namespaces follow the folder path. Entities live under `Domain/Entities`, enums under
 `Domain/Enums`, services under `Infrastructure/Services` or `Web/Services`, endpoint groups
 under `Web/Endpoints`, Razor components under `Web/Components`.
 
-Some older files predate this rule and still hold several types. Do not rewrite them as a
-side effect of unrelated work; split them when the work is actually about that file.
+Carry only the using directives a file actually needs. Splitting a type out of a larger file
+tends to bring along imports that belonged to its neighbours.
 
 ## Notes that are not code
 

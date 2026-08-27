@@ -10,40 +10,6 @@ using XeonProductions.Infrastructure.Data;
 
 namespace XeonProductions.Infrastructure.Services;
 
-public record ImportOptions
-{
-    /// <summary>Base URL of the WordPress site, without a trailing slash.</summary>
-    public string SourceUrl { get; init; } = "https://xeonproductions.com";
-
-    /// <summary>Download attachments into the local media store.</summary>
-    public bool ImportMedia { get; init; } = true;
-
-    /// <summary>Report what would happen without writing anything.</summary>
-    public bool DryRun { get; init; }
-
-    /// <summary>Re-import entries that already exist, overwriting their content.</summary>
-    public bool Overwrite { get; init; }
-
-    /// <summary>Author to attribute imported content to. Falls back to the first account.</summary>
-    public string? AuthorId { get; init; }
-}
-
-public record ImportReport
-{
-    public int Categories { get; set; }
-    public int Tags { get; set; }
-    public int Media { get; set; }
-    public int MediaFailed { get; set; }
-    public int Pages { get; set; }
-    public int Posts { get; set; }
-    public int Skipped { get; set; }
-    public List<string> Warnings { get; } = [];
-
-    public override string ToString() =>
-        $"{Posts} posts, {Pages} pages, {Categories} categories, {Tags} tags, " +
-        $"{Media} media ({MediaFailed} failed), {Skipped} skipped, {Warnings.Count} warnings";
-}
-
 /// <summary>
 /// One-way import from the WordPress REST API into this schema. It reads the public
 /// endpoints only, so it needs no credentials on the WordPress side.

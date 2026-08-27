@@ -8,58 +8,6 @@ using XeonProductions.Infrastructure.Data;
 
 namespace XeonProductions.Infrastructure.Services;
 
-public class MediaOptions
-{
-    /// <summary>Absolute or content-root-relative directory that holds uploaded files.</summary>
-    public string StorageRoot { get; set; } = "media";
-
-    /// <summary>URL prefix the stored files are served from.</summary>
-    public string PublicBasePath { get; set; } = "/media";
-
-    public long MaxFileSizeBytes { get; set; } = 25 * 1024 * 1024;
-    public int ThumbnailWidth { get; set; } = 480;
-
-    /// <summary>Images wider than this are downscaled on upload.</summary>
-    public int MaxImageWidth { get; set; } = 2000;
-
-    /// <summary>Quality for generated WebP thumbnails, 1 to 100.</summary>
-    public int ThumbnailQuality { get; set; } = 82;
-
-    public string[] AllowedExtensions { get; set; } =
-    [
-        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".svg", ".ico",
-        ".pdf", ".txt", ".zip", ".json", ".xml", ".csv", ".mp4", ".webm"
-    ];
-}
-
-public record MediaUploadResult(bool Success, MediaItem? Item, string? Error);
-
-/// <summary>
-/// The sizes available for one stored image, resolved from a public URL. Used where an
-/// image is referenced by URL rather than by id, such as the site logo.
-/// </summary>
-public record MediaVariants(
-    string Url,
-    int? Width,
-    int? Height,
-    string? ThumbnailUrl,
-    int ThumbnailWidth);
-
-public interface IMediaService
-{
-    Task<MediaUploadResult> SaveAsync(Stream content, string fileName, string contentType,
-        string? uploadedById = null, string? sourceUrl = null, CancellationToken ct = default);
-    Task<bool> DeleteAsync(int id, CancellationToken ct = default);
-
-    /// <summary>
-    /// Looks up a stored image from its public URL. Returns null for an external URL or one
-    /// that does not match anything in the library.
-    /// </summary>
-    Task<MediaVariants?> ResolveByUrlAsync(string? url, CancellationToken ct = default);
-    string PublicUrl(string? relativePath);
-    string ThumbnailUrl(MediaItem item);
-}
-
 /// <summary>
 /// Stores uploads on disk and records them in the database.
 ///

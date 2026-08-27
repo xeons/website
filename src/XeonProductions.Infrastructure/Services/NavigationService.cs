@@ -6,13 +6,6 @@ using XeonProductions.Infrastructure.Data;
 
 namespace XeonProductions.Infrastructure.Services;
 
-public interface INavigationService
-{
-    Task<IReadOnlyList<MenuItem>> GetMenuAsync(MenuLocation location, CancellationToken ct = default);
-    Task<IReadOnlyList<Widget>> GetWidgetsAsync(WidgetArea area, CancellationToken ct = default);
-    void Invalidate();
-}
-
 /// <summary>
 /// Menus and widgets render on every request and change rarely, so both are cached until
 /// the admin edits them.

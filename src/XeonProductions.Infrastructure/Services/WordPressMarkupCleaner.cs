@@ -5,12 +5,6 @@ using Microsoft.Extensions.Logging;
 
 namespace XeonProductions.Infrastructure.Services;
 
-public interface IWordPressMarkupCleaner
-{
-    string Clean(string? html);
-    int LastCodeBlockCount { get; }
-}
-
 /// <summary>
 /// Rewrites plugin-specific markup into plain semantic HTML during import.
 ///

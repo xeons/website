@@ -9,14 +9,6 @@ using XeonProductions.Infrastructure.Services;
 
 namespace XeonProductions.Infrastructure.Data;
 
-public static class Roles
-{
-    public const string Administrator = "Administrator";
-    public const string Editor = "Editor";
-
-    public static readonly string[] All = [Administrator, Editor];
-}
-
 /// <summary>
 /// Brings a fresh database up to a usable state: schema, roles, an owner account, the default
 /// menus and the sidebar widgets. Safe to run on every start; every step is idempotent.

@@ -65,9 +65,3 @@ public class RedirectRulesMiddleware(RequestDelegate next, ILogger<RedirectRules
         return "/" + path.Trim('/').ToLowerInvariant();
     }
 }
-
-public static class RedirectRulesExtensions
-{
-    public static IApplicationBuilder UseRedirectRules(this IApplicationBuilder app) =>
-        app.UseMiddleware<RedirectRulesMiddleware>();
-}

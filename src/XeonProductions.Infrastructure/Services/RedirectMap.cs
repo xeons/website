@@ -5,14 +5,6 @@ using XeonProductions.Infrastructure.Data;
 
 namespace XeonProductions.Infrastructure.Services;
 
-public record RedirectRule(int Id, string ToUrl, int StatusCode);
-
-public interface IRedirectMap
-{
-    Task<RedirectRule?> FindAsync(string path, CancellationToken ct = default);
-    void Invalidate();
-}
-
 /// <summary>
 /// The redirect table is consulted on every request, so it is held in memory as a dictionary
 /// and only re-read when the admin changes it. A site has tens of rules, not thousands.
