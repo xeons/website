@@ -116,6 +116,14 @@ coverage.
 explanatory comment: why an approach was chosen, what was tried and rejected, a bug that
 was diagnosed, an observation that may matter later. Keep it out of the tracked tree.
 
+## Licence
+
+The project is AGPL v3 or later. Two things follow when adding a dependency: it must be
+compatible with the AGPL, and a copyleft one pulls its terms into the whole work. Permissive
+licences such as MIT, BSD, Apache 2.0 and the PostgreSQL licence are fine. GPL v2 **only**,
+without the "or later", is not compatible and must not be added. Check before taking a
+dependency, and record it in the README table.
+
 ## Project layout
 
 | Project | Contains |

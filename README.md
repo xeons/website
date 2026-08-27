@@ -440,3 +440,36 @@ docker run --rm -v newwebsite_downloads-data:/downloads -v "$PWD":/backup alpine
   redirects to `/feed.xml` for readers subscribed to the WordPress URL.
 - The theme reads its palette from CSS custom properties emitted per request from the admin
   settings. Only validated hex colours make it into that block.
+
+## Licence
+
+GNU Affero General Public License, version 3 or later. The full text is in `LICENSE`.
+
+The AGPL was chosen over the GPL because this is a web application rather than something
+people install. Section 13 is the difference: anyone who runs a modified copy as a network
+service has to offer its source to the people using it, which the plain GPL does not require
+since nothing is being distributed.
+
+That obligation applies to this deployment too. There is no code change needed to satisfy it,
+because the footer already has two ways to carry the link: add an entry to the **Footer** menu
+under Menus, or put it in **Footer text** under Settings. Point either at the repository.
+
+### Third-party components
+
+| Component | Licence |
+| --- | --- |
+| TinyMCE, vendored in `wwwroot/lib/tinymce` | GPL v2 or later |
+| TinyMCE.Blazor wrapper | MIT |
+| AngleSharp, ColorCode, HtmlSanitizer, MailKit, SkiaSharp, EF Core, ASP.NET Identity | MIT |
+| Npgsql | PostgreSQL licence |
+| xUnit | Apache 2.0 |
+| Moq | BSD 3-Clause |
+| bUnit | MIT |
+
+Everything except TinyMCE is permissive and imposes nothing on the combined work.
+
+TinyMCE is copyleft, and the "or later" in its GPL v2 or later grant is what makes this work:
+it allows the editor to be taken under GPL v3, and GPL v3 and AGPL v3 are written to permit
+being combined with each other. A GPL v2 only dependency would not have been compatible.
+
+None of this is legal advice.
