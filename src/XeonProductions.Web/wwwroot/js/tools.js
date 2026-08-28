@@ -1169,6 +1169,10 @@
     var DRAW_ROUNDS = 8;
     var DRAW_SLACK = 32;
 
+    /* getRandomValues refuses to fill more than 65536 bytes at a time, which is this many
+       32-bit values. Asking for more throws QuotaExceededError rather than returning short. */
+    var DRAW_LIMIT = 16384;
+
     /*
      * Picks count entries from pool uniformly.
      *
@@ -1187,8 +1191,12 @@
         var chosen = [];
         var round = 0;
 
-        while (chosen.length < count && round < DRAW_ROUNDS) {
-            var batch = new Uint32Array(count - chosen.length + DRAW_SLACK);
+        // Enough rounds to cover the draw limit, plus a margin for rejected values.
+        var rounds = Math.ceil(count / DRAW_LIMIT) + DRAW_ROUNDS;
+
+        while (chosen.length < count && round < rounds) {
+            var wanted = Math.min(count - chosen.length + DRAW_SLACK, DRAW_LIMIT);
+            var batch = new Uint32Array(wanted);
 
             window.crypto.getRandomValues(batch);
 
