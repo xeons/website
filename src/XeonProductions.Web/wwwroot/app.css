@@ -522,6 +522,16 @@ th { font-weight: 600; background: var(--bg-subtle); }
 .site-content.one-container .widget { margin-bottom: 32px; }
 .site-content.one-container .widget:last-child { margin-bottom: 0; }
 
+/* No box to cap here, so the header keeps its rule but loses the band. */
+.site-content.one-container .widget-title {
+    background: none;
+    border-radius: 0;
+    padding: 0 0 .5em;
+    margin-bottom: .8em;
+}
+
+.site-content.one-container .widget-content { padding: 0; }
+
 /* Inside the container this text sits on the surface, not the page background, so the
    contrast tokens derived from the page background do not apply. */
 .site-content.one-container .page-header h1 { color: var(--text); }
@@ -673,20 +683,27 @@ th { font-weight: 600; background: var(--bg-subtle); }
 
 .widget {
     background: var(--bg-surface);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
-    padding: 22px 24px;
     margin-bottom: 26px;
 }
 
+/* The title is a banded header across the top of the box. Its corners are the
+   widget's radius less the border width, so the two curves sit concentric. */
 .widget-title {
-    font-size: 1.15rem;
-    font-weight: 300;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border-strong);
+    border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+    font-size: 1.05rem;
+    font-weight: 600;
     line-height: 1.3;
     color: var(--text);
-    margin: 0 0 .8em;
+    margin: 0;
+    padding: 12px 20px;
 }
+
+.widget-content { padding: 20px; }
 
 .widget ul { list-style: none; margin: 0; padding: 0; }
 .widget li { margin-bottom: .6em; font-size: .93rem; line-height: 1.5; }
@@ -811,12 +828,24 @@ textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
 .footer-widgets .widget {
     background: none;
     border: 0;
+    border-radius: 0;
     box-shadow: none;
     padding: 0;
     margin: 0;
 }
 
-.footer-widgets .widget-title { color: rgba(255, 255, 255, .6); border-bottom-color: rgba(255, 255, 255, .12); }
+/* The band belongs to the sidebar box. Against the dark footer the title keeps only
+   its rule, in the footer's own muted white rather than the page border colour. */
+.footer-widgets .widget-title {
+    background: none;
+    border-radius: 0;
+    padding: 0 0 .5em;
+    margin-bottom: .8em;
+    color: rgba(255, 255, 255, .6);
+    border-bottom-color: rgba(255, 255, 255, .12);
+}
+
+.footer-widgets .widget-content { padding: 0; }
 .footer-widgets a { color: rgba(255, 255, 255, .82); }
 .footer-widgets a:hover { color: #fff; }
 

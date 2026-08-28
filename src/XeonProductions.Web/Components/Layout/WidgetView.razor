@@ -15,6 +15,9 @@
             <h2 class="widget-title">@Widget.Title</h2>
         }
 
+        @* The body is wrapped so the title can be a full-width band while the content
+           keeps its inset. *@
+        <div class="widget-content">
         @switch (Widget.Type)
         {
             case WidgetType.Search:
@@ -101,6 +104,7 @@
                 @((MarkupString)(Widget.HtmlContent ?? string.Empty))
                 break;
         }
+        </div>
     </section>
 }
 
