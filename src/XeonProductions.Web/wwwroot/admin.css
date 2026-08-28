@@ -649,3 +649,97 @@
 }
 
 .stats-chart-axis .peak { font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------- motion --- */
+/* Matches the public theme: transform and opacity where possible, and all of it
+   switched off under prefers-reduced-motion at the end. */
+
+.admin {
+    --ease: cubic-bezier(.2, .7, .3, 1);
+    --fast: 120ms;
+    --medium: 220ms;
+}
+
+.admin-nav a {
+    transition: background-color var(--fast) linear, color var(--fast) linear,
+                padding-left var(--medium) var(--ease);
+}
+
+/* The active item is already marked; this is the hint that the row is a target. */
+.admin-nav a:hover { padding-left: 24px; }
+
+.admin-card {
+    transition: box-shadow var(--medium) var(--ease), border-color var(--medium) var(--ease);
+}
+
+.admin-table tbody tr { transition: background-color var(--fast) linear; }
+
+.media-tile {
+    transition: transform var(--medium) var(--ease), border-color var(--fast) linear,
+                box-shadow var(--medium) var(--ease);
+}
+
+.media-tile:hover { transform: translateY(-2px); }
+
+.media-tile img { transition: transform 400ms var(--ease); }
+.media-thumb { overflow: hidden; }
+.media-tile:hover img { transform: scale(1.04); }
+
+.btn, .btn-sm {
+    transition: background-color var(--fast) linear, border-color var(--fast) linear,
+                color var(--fast) linear, transform var(--fast) var(--ease);
+}
+
+.admin .btn:hover:not(:disabled) { transform: translateY(-1px); }
+.admin .btn:active:not(:disabled) { transform: translateY(0); }
+
+.admin-card input, .admin-card select, .admin-card textarea {
+    transition: border-color var(--fast) linear, box-shadow var(--medium) var(--ease);
+}
+
+/* The statistics bars draw themselves in, so the shape of the distribution
+   registers rather than simply being there. */
+@keyframes bar-grow {
+    from { transform: scaleX(0); }
+    to   { transform: none; }
+}
+
+.stats-bar {
+    transform-origin: left center;
+    animation: bar-grow 420ms var(--ease) both;
+}
+
+@keyframes column-grow {
+    from { transform: scaleY(0); }
+    to   { transform: none; }
+}
+
+.stats-chart .bar {
+    transform-origin: bottom;
+    animation: column-grow 420ms var(--ease) both;
+    transition: fill var(--fast) linear;
+}
+
+/* A saved or failed notice should catch the eye it was written for. */
+@keyframes notice-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.admin .notice { animation: notice-in var(--medium) var(--ease) both; }
+
+.upload-progress::-webkit-progress-value { transition: width var(--medium) linear; }
+.upload-progress::-moz-progress-bar { transition: width var(--medium) linear; }
+
+@media (prefers-reduced-motion: reduce) {
+    .admin *, .admin *::before, .admin *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+
+    .admin-nav a:hover { padding-left: 20px; }
+    .admin .btn:hover:not(:disabled),
+    .media-tile:hover { transform: none; }
+    .media-tile:hover img { transform: none; }
+}

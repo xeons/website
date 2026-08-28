@@ -425,7 +425,10 @@ th { font-weight: 600; background: var(--bg-subtle); }
 
 /* Sub-menus open on hover on pointer devices and on focus for keyboards. */
 .main-nav .sub-menu {
-    display: none;
+    display: flex;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-4px);
     position: absolute;
     top: 100%;
     left: 0;
@@ -442,7 +445,7 @@ th { font-weight: 600; background: var(--bg-subtle); }
 }
 
 .main-nav li:hover > .sub-menu,
-.main-nav li:focus-within > .sub-menu { display: flex; }
+.main-nav li:focus-within > .sub-menu { visibility: visible; opacity: 1; transform: none; }
 
 .menu-toggle {
     display: none;
@@ -894,7 +897,15 @@ textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
     .main-nav { display: none; width: 100%; }
     .main-nav.is-open { display: block; }
     .main-nav ul { flex-direction: column; width: 100%; }
-    .main-nav .sub-menu { position: static; display: flex; box-shadow: none; padding-left: 16px; }
+    .main-nav .sub-menu {
+        position: static;
+        display: flex;
+        visibility: visible;
+        opacity: 1;
+        transform: none;
+        box-shadow: none;
+        padding-left: 16px;
+    }
 
     .inside-navigation {
         display: grid;
@@ -923,6 +934,16 @@ textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
     .site-header, .main-navigation, .widget-area, .site-footer,
     .post-navigation, .pagination { display: none !important; }
     .entry { border: 0; box-shadow: none; padding: 0; }
+
+    /* entry-rise starts at opacity 0 and fills backwards. A print context that
+       does not run animations would keep that starting state and print nothing,
+       so the content is pinned visible here. */
+    *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
 }
 
 /* ---------------------------------------------------------- theme icon --- */
@@ -930,13 +951,14 @@ textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
    reach :root, so these rules live here rather than beside the component. */
 
 .theme-icon-dark { display: none; }
+.theme-icon-light { display: inline-block; }
 
 :root[data-theme='dark'] .theme-icon-light { display: none; }
-:root[data-theme='dark'] .theme-icon-dark { display: inline; }
+:root[data-theme='dark'] .theme-icon-dark { display: inline-block; }
 
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme='light']) .theme-icon-light { display: none; }
-    :root:not([data-theme='light']) .theme-icon-dark { display: inline; }
+    :root:not([data-theme='light']) .theme-icon-dark { display: inline-block; }
     :root[data-theme='dark'] .theme-icon-light { display: none; }
 }
 
@@ -1151,4 +1173,158 @@ pre code .css-property-name { color: var(--code-preprocessor); }
 
     .entry-content .alignleft img,
     .entry-content .alignright img { margin-left: auto; margin-right: auto; }
+}
+
+/* ------------------------------------------------------------- motion --- */
+/* Movement is confined to transform and opacity wherever it can be, since those
+   are the two the compositor can handle without laying the page out again.
+   Everything here is switched off under prefers-reduced-motion at the end of
+   this block, so the rules stay in one place rather than each carrying a guard. */
+
+:root {
+    --ease: cubic-bezier(.2, .7, .3, 1);
+    --fast: 120ms;
+    --medium: 220ms;
+}
+
+/* Links fade between colours. The underline on hover is the theme's own and is
+   left alone; only the colour change is smoothed. */
+a,
+.entry-title a,
+.entry-meta a,
+.widget a,
+.tag-list a,
+.pagination a,
+.footer-nav a { transition: color var(--medium) var(--ease),
+                            background-color var(--medium) var(--ease),
+                            border-color var(--medium) var(--ease),
+                            transform var(--fast) var(--ease); }
+
+/* Navigation items fade their background and text. */
+.main-nav a { transition: background-color var(--medium) var(--ease), color var(--medium) var(--ease); }
+
+/* Sub-menus fade down rather than appearing. Visibility is what keeps them out
+   of the tab order while hidden; opacity alone would leave them focusable. */
+.main-nav .sub-menu {
+    transition: opacity var(--medium) var(--ease), transform var(--medium) var(--ease),
+                visibility 0s linear var(--medium);
+}
+
+.main-nav li:hover > .sub-menu,
+.main-nav li:focus-within > .sub-menu {
+    transition: opacity var(--medium) var(--ease), transform var(--medium) var(--ease),
+                visibility 0s;
+}
+
+/* Buttons lift slightly and press back down, which gives the click somewhere to
+   land. The shadow carries most of the effect; the movement is deliberately
+   smaller than it looks. */
+.btn, .icon-btn {
+    transition: background-color var(--fast) linear, border-color var(--fast) linear,
+                color var(--fast) linear, transform var(--fast) var(--ease),
+                box-shadow var(--medium) var(--ease);
+}
+
+.btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
+.icon-btn:hover { transform: translateY(-1px); }
+.icon-btn:active { transform: translateY(0); }
+
+/* Only the summary cards react: they are a link to somewhere else. The full
+   entry on a post's own page is not going anywhere and should sit still. */
+.entry-summary {
+    transition: transform var(--medium) var(--ease), box-shadow var(--medium) var(--ease),
+                border-color var(--medium) var(--ease);
+}
+
+.entry-summary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-strong);
+}
+
+/* A featured image behind a link creeps forward on hover. overflow:hidden on the
+   frame is what keeps the growth inside the corner radius. */
+.entry-image { overflow: hidden; border-radius: var(--radius); }
+.entry-image img { transition: transform 400ms var(--ease); }
+a.entry-image:hover img,
+.entry-summary:hover .entry-image img { transform: scale(1.03); }
+
+.tag-list a:hover { transform: translateY(-1px); border-color: var(--accent); color: var(--accent); }
+
+.pagination a:hover { transform: translateY(-1px); }
+
+.widget { transition: box-shadow var(--medium) var(--ease); }
+.widget:hover { box-shadow: var(--shadow-md); }
+
+/* The toggle turns towards the state it is about to switch to. */
+/* Display is left to the toggle rules above, which decide which icon is showing.
+   Transform needs a non-inline box, so those use inline-block. */
+.theme-icon-light, .theme-icon-dark { transition: transform 320ms var(--ease); }
+
+[data-theme-toggle]:hover .theme-icon-light,
+[data-theme-toggle]:hover .theme-icon-dark { transform: rotate(35deg); }
+
+/* Fields settle into focus rather than snapping. */
+input:not([type]), input[type='text'], input[type='email'], input[type='url'],
+input[type='password'], input[type='search'], input[type='number'],
+input[type='datetime-local'], select, textarea {
+    transition: border-color var(--fast) linear, box-shadow var(--medium) var(--ease);
+}
+
+/* One visible focus ring for anything reached by keyboard, drawn outside the
+   element so it never shifts the layout. */
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* Entries arrive with a short rise. Only the first few are staggered: past that
+   the delay would be noticeable rather than pleasant, and anything below the
+   fold has finished long before it is scrolled to. */
+@keyframes entry-rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.content-area > .entry,
+.content-area > .archive-header {
+    animation: entry-rise 320ms var(--ease) both;
+}
+
+.content-area > .entry:nth-of-type(2) { animation-delay: 60ms; }
+.content-area > .entry:nth-of-type(3) { animation-delay: 120ms; }
+.content-area > .entry:nth-of-type(n+4) { animation-delay: 160ms; }
+
+/* The notice that appears after a form is submitted, which the reader is
+   waiting for and should not simply blink into place. */
+@keyframes notice-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.notice { animation: notice-in var(--medium) var(--ease) both; }
+
+/* Anyone who has asked their system for less movement gets none of it. The
+   short durations rather than zero keep transitionend handlers firing. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .entry-summary:hover,
+    .btn:hover:not(:disabled),
+    .icon-btn:hover,
+    .tag-list a:hover,
+    .pagination a:hover { transform: none; }
+
+    a.entry-image:hover img,
+    .entry-summary:hover .entry-image img { transform: none; }
+
+    [data-theme-toggle]:hover .theme-icon-light,
+    [data-theme-toggle]:hover .theme-icon-dark { transform: none; }
 }
