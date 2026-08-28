@@ -1086,10 +1086,9 @@ pre code .css-property-name { color: var(--code-preprocessor); }
     margin-right: auto;
 }
 
-.entry-content .alignnone {
-    display: block;
-    float: none;
-}
+/* Only clears an inherited float. WordPress puts this on inline images too, such
+   as the small icons beside a list item, so it must not force a block. */
+.entry-content .alignnone { float: none; }
 
 /* The block editor wraps a figure in this div whenever a style variation is
    applied. The wrapper holds nothing but the float, so it collapses to no
