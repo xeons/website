@@ -1,0 +1,116 @@
+@page "/error/{Code:int}"
+@inject IHttpContextAccessor HttpContextAccessor
+
+@*
+    The page behind UseStatusCodePagesWithReExecute. Any response that ends with a status in
+    the 400s or 500s and no body of its own is re-run through here, so a refused request
+    explains itself instead of arriving blank.
+
+    Responses that already wrote a body, such as the download endpoints' own pages, keep
+    theirs; the middleware only steps in when there is nothing to show. Not-found is one of
+    those: the router carries its own page for an unmatched address.
+*@
+
+<SeoHead Title="@Heading" NoIndex="true" />
+
+<PageShell>
+    <article class="entry">
+        <header class="entry-header">
+            <h1 class="entry-title">@Heading</h1>
+        </header>
+
+        <div class="entry-content">
+            <p>@Message</p>
+
+            @if (Code == 429 && _retryAfter is not null)
+            {
+                <p>Try again in about @_retryAfter.</p>
+            }
+
+            <p><a href="/">Back to the home page</a></p>
+
+            @if (Code >= 500 && _requestId is not null)
+            {
+                <p class="row-sub">Reference: <code>@_requestId</code></p>
+            }
+        </div>
+    </article>
+</PageShell>
+
+@code {
+    [Parameter]
+    public int Code { get; set; }
+
+    private string? _requestId;
+    private string? _retryAfter;
+
+    private string Heading => Code switch
+    {
+        400 => "That request could not be read",
+        401 or 403 => "Not allowed",
+        405 => "That is not how this address works",
+        408 => "That took too long",
+        413 => "That was too large",
+        429 => "Too many requests",
+        >= 500 and < 600 => "Something went wrong",
+        _ => "That did not work"
+    };
+
+    private string Message => Code switch
+    {
+        400 =>
+            "Something about the request was malformed, so the server could not act on it. "
+            + "If you were following a link, it may have been truncated somewhere along the way.",
+
+        401 or 403 =>
+            "This address is not open to you. If you should have access, sign in and try again.",
+
+        405 =>
+            "This address exists, but not for the kind of request that reached it. That is "
+            + "usually a stale form or a link that was meant to be a button.",
+
+        408 =>
+            "The request did not finish in time. That is usually a connection problem rather "
+            + "than anything wrong with what you asked for.",
+
+        413 =>
+            "The upload was larger than this site accepts.",
+
+        429 =>
+            "Rather a lot of requests have arrived from your connection in a short time, so "
+            + "this one was turned away. Nothing is wrong with your account or your message.",
+
+        503 =>
+            "The site is briefly unable to answer. This is usually short lived, so it is "
+            + "worth trying again in a minute.",
+
+        >= 500 and < 600 =>
+            "The request could not be completed. The error has been logged and I will see it.",
+
+        _ =>
+            "The request could not be completed."
+    };
+
+    protected override void OnInitialized()
+    {
+        var http = HttpContextAccessor.HttpContext;
+
+        // The status is deliberately not set here. The re-executed request already carries
+        // the original one, and assigning it would make the status code middleware re-run
+        // this same page, which Blazor cannot do twice in one request scope. Reaching this
+        // route directly therefore answers 200, which costs nothing.
+
+        // Surfaced so a reported problem can be tied back to a log entry.
+        _requestId = http?.TraceIdentifier;
+
+        // The rate limiter sets this when it knows when the window reopens.
+        var header = http?.Response.Headers.RetryAfter.ToString();
+
+        if (!string.IsNullOrEmpty(header) && int.TryParse(header, out var seconds))
+        {
+            _retryAfter = seconds < 90
+                ? $"{seconds} seconds"
+                : $"{Math.Ceiling(seconds / 60.0):0} minutes";
+        }
+    }
+}

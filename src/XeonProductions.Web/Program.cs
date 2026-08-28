@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using System.Globalization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -129,6 +130,22 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddRateLimiter(options =>
 {
+    // 429 says what actually happened. The default, 503, claims the whole site is down.
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // No body is written here on purpose: an empty response is what lets the status code
+    // pages middleware step in and render a real page.
+    options.OnRejected = (context, _) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter =
+                ((int)retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+        }
+
+        return ValueTask.CompletedTask;
+    };
+
     // Applies to the contact page endpoint, which serves the form as well as receiving it.
     // Reading is left unlimited: a shared window over GETs meant a handful of visitors
     // looking at the page locked everyone out of it. Submissions are counted per address so
@@ -183,6 +200,14 @@ else
     app.UseExceptionHandler("/error", createScopeForErrors: true);
     app.UseHsts();
 }
+
+// Turns a bare status code into a page. Registered before everything that can produce
+// one, and skipped for the JSON endpoints, which should answer with JSON rather than be
+// re-executed into markup.
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/api")
+               && !context.Request.Path.StartsWithSegments("/admin/api"),
+    branch => branch.UseStatusCodePagesWithReExecute("/error/{0}"));
 
 app.UseResponseCompression();
 app.UseSecurityHeaders();
