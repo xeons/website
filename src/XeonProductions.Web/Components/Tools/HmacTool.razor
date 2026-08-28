@@ -1,0 +1,51 @@
+@*
+    Keyed hashing through Web Crypto. The key is treated as UTF-8 text; a key held as hex or
+    Base64 needs decoding first, which the encoding tools will do.
+*@
+
+<div class="tool" data-tool="hmac">
+    <div class="tool-field">
+        <label for="hmac-in">Message</label>
+        <textarea id="hmac-in" data-tool-input rows="6" spellcheck="false"
+                  placeholder="The message to sign"></textarea>
+    </div>
+
+    <div class="tool-field">
+        <label for="hmac-key">Secret key</label>
+        <input type="text" id="hmac-key" data-tool-option="key" spellcheck="false"
+               autocomplete="off" placeholder="The shared secret" />
+    </div>
+
+    <div class="tool-options">
+        <label class="tool-inline">
+            Algorithm
+            <select data-tool-option="algorithm">
+                <option value="SHA-256">HMAC-SHA-256</option>
+                <option value="SHA-384">HMAC-SHA-384</option>
+                <option value="SHA-512">HMAC-SHA-512</option>
+                <option value="SHA-1">HMAC-SHA-1</option>
+            </select>
+        </label>
+
+        <label class="tool-inline">
+            Output
+            <select data-tool-option="encoding">
+                <option value="hex">Hex</option>
+                <option value="base64">Base64</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="tool-field">
+        <label for="hmac-out">Signature</label>
+        <textarea id="hmac-out" data-tool-output rows="3" spellcheck="false" readonly></textarea>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn" data-tool-run="sign">Sign</button>
+        <button type="button" class="btn btn-secondary" data-tool-copy>Copy output</button>
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>

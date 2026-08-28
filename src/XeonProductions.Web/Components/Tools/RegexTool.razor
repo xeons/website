@@ -1,0 +1,35 @@
+@*
+    Matching runs in a worker with a deadline. A pattern that backtracks catastrophically will
+    not return, and running it on this thread would hang the tab with no way out; in a worker
+    it can simply be terminated.
+*@
+
+<div class="tool" data-tool="regex" data-worker-src="@Assets["js/tools-regex-worker.js"]">
+    <div class="tool-field">
+        <label for="rx-pattern">Pattern</label>
+        <input type="text" id="rx-pattern" data-regex-pattern spellcheck="false"
+               autocomplete="off" placeholder="(\w+)@@(\w+)\.com" />
+    </div>
+
+    <div class="tool-options">
+        <label class="tool-check"><input type="checkbox" data-regex-flag="g" checked /> <code>g</code> global</label>
+        <label class="tool-check"><input type="checkbox" data-regex-flag="i" /> <code>i</code> ignore case</label>
+        <label class="tool-check"><input type="checkbox" data-regex-flag="m" /> <code>m</code> multiline</label>
+        <label class="tool-check"><input type="checkbox" data-regex-flag="s" /> <code>s</code> dot matches newline</label>
+        <label class="tool-check"><input type="checkbox" data-regex-flag="u" /> <code>u</code> unicode</label>
+    </div>
+
+    <div class="tool-field">
+        <label for="rx-subject">Test against</label>
+        <textarea id="rx-subject" data-tool-input rows="9" spellcheck="false"
+                  placeholder="Text to search"></textarea>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <div class="tool-result" data-tool-result></div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>

@@ -1,0 +1,80 @@
+@*
+    Every digest at once, recomputed as the input changes. The SHA family comes from the
+    browser's own Web Crypto implementation; MD5 and CRC32 are not in it and are computed
+    in script.
+*@
+
+<div class="tool" data-tool="hash">
+    <div class="tool-field">
+        <label for="hash-in">Input</label>
+        <textarea id="hash-in" data-tool-input rows="6" spellcheck="false"
+                  placeholder="Text to hash"></textarea>
+    </div>
+
+    <div class="tool-options">
+        <label class="tool-inline">
+            Output
+            <select data-tool-option="encoding">
+                <option value="hex">Hex</option>
+                <option value="base64">Base64</option>
+            </select>
+        </label>
+
+        <label class="tool-check">
+            <input type="checkbox" data-tool-option="upper" />
+            Upper case hex
+        </label>
+    </div>
+
+    <div class="tool-table-wrap">
+        <table class="tool-table">
+            <thead>
+                <tr>
+                    <th scope="col">Algorithm</th>
+                    <th scope="col">Digest</th>
+                    <th scope="col"><span class="screen-reader-text">Copy</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr data-hash="crc32">
+                    <th scope="row">CRC32</th>
+                    <td><code class="tool-digest" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-hash="md5">
+                    <th scope="row">MD5</th>
+                    <td><code class="tool-digest" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-hash="sha1">
+                    <th scope="row">SHA-1</th>
+                    <td><code class="tool-digest" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-hash="sha256">
+                    <th scope="row">SHA-256</th>
+                    <td><code class="tool-digest" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-hash="sha384">
+                    <th scope="row">SHA-384</th>
+                    <td><code class="tool-digest" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-hash="sha512">
+                    <th scope="row">SHA-512</th>
+                    <td><code class="tool-digest" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+
+    <div class="notice notice-warning">
+        CRC32 is a checksum, not a hash: it detects accidental corruption and nothing more.
+        MD5 and SHA-1 are both broken against deliberate collisions and should not be used to
+        sign or verify anything. Reach for SHA-256 or better.
+    </div>
+</div>

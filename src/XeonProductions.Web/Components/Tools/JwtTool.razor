@@ -1,0 +1,27 @@
+@*
+    Splits a token on its dots and Base64url-decodes the first two segments. The signature is
+    shown but not checked: verifying it would mean holding the secret, which has no business
+    being in a browser.
+*@
+
+<div class="tool" data-tool="jwt">
+    <div class="tool-field">
+        <label for="jwt-in">Token</label>
+        <textarea id="jwt-in" data-tool-input rows="5" spellcheck="false"
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature"></textarea>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <div class="tool-result" data-tool-result></div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+
+    <div class="notice notice-warning">
+        This decodes a token; it does not verify one. A JWT's payload is only Base64, not
+        encryption, so anyone holding the token can read every claim in it. Treat the contents
+        as readable by whoever has the token, and never put a secret in one.
+    </div>
+</div>

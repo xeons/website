@@ -1,0 +1,52 @@
+@page "/tools/{Slug}"
+@using XeonProductions.Web.Tools
+@inject NavigationManager Nav
+
+@*
+    Renders one tool from the catalog. The body is a component chosen by slug, so a new tool
+    is a catalog entry and a component rather than another route.
+*@
+
+@if (_tool is not null)
+{
+    <SeoHead Title="@_tool.Name" Description="@_tool.Description" Canonical="@($"/tools/{_tool.Slug}")" />
+
+    <PageShell Sidebar="SidebarLayout.NoSidebar">
+        <article class="entry">
+            <header class="entry-header">
+                <p class="breadcrumbs"><a href="/tools">Tools</a></p>
+                <h1 class="entry-title">@_tool.Name</h1>
+                <p class="tool-lede">@_tool.Summary</p>
+            </header>
+
+            <noscript>
+                <div class="notice notice-error">
+                    These tools run in the browser, so this one needs JavaScript enabled.
+                </div>
+            </noscript>
+
+            <DynamicComponent Type="_tool.ComponentType" />
+
+            <p class="tool-privacy">
+                This runs entirely in your browser. Nothing you type here is sent to the
+                server, logged, or leaves your machine.
+            </p>
+        </article>
+    </PageShell>
+}
+
+@code {
+    [Parameter]
+    public string? Slug { get; set; }
+
+    private ToolDefinition? _tool;
+
+    protected override void OnParametersSet()
+    {
+        _tool = ToolCatalog.Find(Slug);
+
+        // Hands off to the router's NotFoundPage and sets a real 404 rather than answering
+        // 200 with an apology, which search engines would index as a page.
+        if (_tool is null) Nav.NotFound();
+    }
+}

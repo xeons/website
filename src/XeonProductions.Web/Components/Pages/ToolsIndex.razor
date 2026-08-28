@@ -1,0 +1,44 @@
+@page "/tools"
+@using XeonProductions.Web.Tools
+
+<SeoHead Title="Developer Tools"
+         Description="Hashing, encoding, formatting and generator tools that run entirely in your browser. Nothing you paste is ever sent to a server."
+         Canonical="/tools" />
+
+<PageShell Sidebar="SidebarLayout.NoSidebar">
+    <div class="page-header">
+        <h1>Developer Tools</h1>
+        <p>
+            A set of small utilities I kept opening other sites for. Every one of them runs
+            in your browser: what you paste stays on your machine and is never sent here.
+        </p>
+    </div>
+
+    @foreach (var category in Categories)
+    {
+        <section class="tool-section">
+            <h2>@ToolCatalog.HeadingFor(category)</h2>
+
+            <div class="tool-grid">
+                @foreach (var tool in ToolCatalog.InCategory(category))
+                {
+                    <a class="tool-card" href="/tools/@tool.Slug">
+                        <span class="tool-card-name">@tool.Name</span>
+                        <span class="tool-card-summary">@tool.Summary</span>
+                    </a>
+                }
+            </div>
+        </section>
+    }
+</PageShell>
+
+@code {
+    private static readonly ToolCategory[] Categories =
+    [
+        ToolCategory.Hashing,
+        ToolCategory.Encoding,
+        ToolCategory.Formats,
+        ToolCategory.Generators,
+        ToolCategory.Text
+    ];
+}

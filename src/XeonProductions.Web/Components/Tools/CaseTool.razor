@@ -1,0 +1,82 @@
+@*
+    Every style at once. The input is split into words first, on whitespace, punctuation and
+    the boundaries inside camelCase, so any of these styles can be converted into any other.
+*@
+
+<div class="tool" data-tool="case">
+    <div class="tool-field">
+        <label for="case-in">Input</label>
+        <textarea id="case-in" data-tool-input rows="4" spellcheck="false"
+                  placeholder="the quick brown fox"></textarea>
+    </div>
+
+    <div class="tool-table-wrap">
+        <table class="tool-table">
+            <thead>
+                <tr>
+                    <th scope="col">Style</th>
+                    <th scope="col">Result</th>
+                    <th scope="col"><span class="screen-reader-text">Copy</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr data-case="camel">
+                    <th scope="row">camelCase</th>
+                    <td><code data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-case="pascal">
+                    <th scope="row">PascalCase</th>
+                    <td><code data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-case="snake">
+                    <th scope="row">snake_case</th>
+                    <td><code data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-case="constant">
+                    <th scope="row">CONSTANT_CASE</th>
+                    <td><code data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-case="kebab">
+                    <th scope="row">kebab-case</th>
+                    <td><code data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-case="dot">
+                    <th scope="row">dot.case</th>
+                    <td><code data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-case="title">
+                    <th scope="row">Title Case</th>
+                    <td><code data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-case="sentence">
+                    <th scope="row">Sentence case</th>
+                    <td><code data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-case="upper">
+                    <th scope="row">UPPER CASE</th>
+                    <td><code data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr data-case="lower">
+                    <th scope="row">lower case</th>
+                    <td><code data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>

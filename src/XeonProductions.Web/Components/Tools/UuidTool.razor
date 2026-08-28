@@ -1,0 +1,43 @@
+@*
+    Version 4 is entirely random. Version 7 puts a millisecond timestamp in the high bits, so
+    a set of them sorts into creation order, which is what makes them useful as database keys.
+*@
+
+<div class="tool" data-tool="uuid">
+    <div class="tool-options">
+        <label class="tool-inline">
+            Version
+            <select data-tool-option="version">
+                <option value="4">Version 4: random</option>
+                <option value="7">Version 7: time-ordered</option>
+            </select>
+        </label>
+
+        <label class="tool-inline">
+            How many
+            <input type="number" data-tool-option="count" value="5" min="1" max="500" />
+        </label>
+
+        <label class="tool-check">
+            <input type="checkbox" data-tool-option="upper" />
+            Upper case
+        </label>
+
+        <label class="tool-check">
+            <input type="checkbox" data-tool-option="braces" />
+            Wrap in braces
+        </label>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn" data-tool-run="generate">Generate</button>
+        <button type="button" class="btn btn-secondary" data-tool-copy>Copy all</button>
+    </div>
+
+    <div class="tool-field">
+        <label for="uuid-out">Output</label>
+        <textarea id="uuid-out" data-tool-output rows="8" spellcheck="false" readonly></textarea>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>

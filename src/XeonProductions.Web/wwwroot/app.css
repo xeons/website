@@ -1194,6 +1194,195 @@ pre code .css-property-name { color: var(--code-preprocessor); }
     .entry-content .alignright img { margin-left: auto; margin-right: auto; }
 }
 
+/* ---------------------------------------------------------------- tools -- */
+
+.tool-section { margin-bottom: 36px; }
+.tool-section h2 { font-size: 1.3rem; margin: 0 0 .7em; }
+
+.tool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.tool-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    color: var(--text);
+}
+
+.tool-card:hover {
+    border-color: var(--accent);
+    text-decoration: none;
+    box-shadow: var(--shadow-md);
+}
+
+.tool-card-name { font-weight: 600; color: var(--accent); }
+.tool-card-summary { font-size: .88rem; color: var(--text-muted); line-height: 1.45; }
+
+.tool-lede { color: var(--text-muted); margin: .4em 0 0; }
+
+.tool-privacy {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: .85rem;
+    color: var(--text-muted);
+}
+
+.tool { margin-top: 20px; }
+
+.tool-io {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+
+.tool-field { margin-bottom: 1.1em; }
+.tool-io .tool-field { margin-bottom: 0; }
+
+.tool textarea { font-family: var(--font-mono); font-size: .88rem; resize: vertical; }
+.tool input[type='text'] { font-family: var(--font-mono); }
+
+.tool-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    align-items: center;
+    margin: 16px 0;
+}
+
+/* Option labels sit beside their control rather than above it, unlike form fields. */
+.tool-check,
+.tool-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 400;
+    font-size: .9rem;
+    margin: 0;
+}
+
+.tool-check input { margin: 0; }
+.tool-inline select,
+.tool-inline input { width: auto; margin: 0; }
+.tool-inline input[type='number'] { width: 6em; }
+
+.tool-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 16px 0;
+}
+
+.tool-actions .btn.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.tool-status {
+    min-height: 1.4em;
+    margin: 0;
+    font-size: .88rem;
+    color: var(--text-muted);
+}
+
+.tool.has-error .tool-status { color: var(--danger); }
+
+.tool-hint { margin: .4em 0 0; font-size: .82rem; color: var(--text-muted); }
+
+.tool-table-wrap { overflow-x: auto; margin: 16px 0; }
+
+.tool-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.tool-table th,
+.tool-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.tool-table thead th { background: var(--bg-subtle); font-weight: 600; }
+.tool-table code { font-size: .85rem; word-break: break-all; }
+
+.tool-digest { display: block; min-height: 1.2em; }
+
+/* An unfilled cell would otherwise show the code background as an empty bar. */
+.tool-table code:empty { background: none; border: 0; padding: 0; }
+
+.tool-block { margin: 20px 0; }
+.tool-block h3 { font-size: 1rem; margin: 0 0 .5em; }
+
+.tool-pre {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: .85rem;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.tool-highlight mark {
+    background: rgba(var(--accent-rgb), .28);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+.tool-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+}
+
+.tool-stat {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 12px;
+    text-align: center;
+}
+
+.tool-stat-value { display: block; font-size: 1.4rem; font-weight: 600; line-height: 1.2; }
+.tool-stat-label { display: block; font-size: .78rem; color: var(--text-muted); margin-top: 4px; }
+
+.tool-diff {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: auto;
+    font-family: var(--font-mono);
+    font-size: .85rem;
+    max-height: 640px;
+}
+
+.tool-diff-line { display: flex; gap: 10px; padding: 1px 10px; white-space: pre-wrap; word-break: break-word; }
+.tool-diff-mark { flex: 0 0 1ch; color: var(--text-muted); user-select: none; }
+.tool-diff-text { flex: 1 1 auto; }
+.tool-diff-line.is-added { background: rgba(2, 122, 72, .12); }
+.tool-diff-line.is-removed { background: rgba(180, 35, 24, .12); }
+
+.tool-colour-head { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
+
+.tool-swatch {
+    width: 84px;
+    height: 84px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    flex: 0 0 auto;
+}
+
+.tool input[type='color'] { width: 72px; height: 42px; padding: 2px; }
+
+.tool-strength { margin: 8px 0 0; font-size: .88rem; color: var(--text-muted); }
+
+@media (max-width: 768px) {
+    .tool-io { grid-template-columns: 1fr; }
+}
+
 /* ------------------------------------------------------------- motion --- */
 /* Movement is confined to transform and opacity wherever it can be, since those
    are the two the compositor can handle without laying the page out again.

@@ -1,0 +1,35 @@
+@*
+    Text to and from binary, eight bits per UTF-8 byte. Decoding ignores whitespace, so
+    grouped and ungrouped input both work.
+*@
+
+<div class="tool" data-tool="binary">
+    <div class="tool-io">
+        <div class="tool-field">
+            <label for="bin-in">Input</label>
+            <textarea id="bin-in" data-tool-input rows="7" spellcheck="false"
+                      placeholder="Text to encode, or binary to decode"></textarea>
+        </div>
+        <div class="tool-field">
+            <label for="bin-out">Output</label>
+            <textarea id="bin-out" data-tool-output rows="7" spellcheck="false" readonly></textarea>
+        </div>
+    </div>
+
+    <div class="tool-options">
+        <label class="tool-check">
+            <input type="checkbox" data-tool-option="spaced" checked />
+            Separate each byte with a space
+        </label>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn" data-tool-run="encode">Encode</button>
+        <button type="button" class="btn btn-secondary" data-tool-run="decode">Decode</button>
+        <button type="button" class="btn btn-secondary" data-tool-swap>Swap</button>
+        <button type="button" class="btn btn-secondary" data-tool-copy>Copy output</button>
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>

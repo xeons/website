@@ -1,0 +1,36 @@
+@*
+    Four views of one integer. Editing any field rewrites the others. The arithmetic uses
+    BigInt, so a value past 2^53 keeps every digit instead of rounding.
+*@
+
+<div class="tool" data-tool="base-convert">
+    <div class="tool-field">
+        <label for="base-2">Binary (base 2)</label>
+        <input type="text" id="base-2" data-base="2" spellcheck="false" autocomplete="off"
+               placeholder="1010" />
+    </div>
+
+    <div class="tool-field">
+        <label for="base-8">Octal (base 8)</label>
+        <input type="text" id="base-8" data-base="8" spellcheck="false" autocomplete="off"
+               placeholder="12" />
+    </div>
+
+    <div class="tool-field">
+        <label for="base-10">Decimal (base 10)</label>
+        <input type="text" id="base-10" data-base="10" spellcheck="false" autocomplete="off"
+               placeholder="10" />
+    </div>
+
+    <div class="tool-field">
+        <label for="base-16">Hexadecimal (base 16)</label>
+        <input type="text" id="base-16" data-base="16" spellcheck="false" autocomplete="off"
+               placeholder="a" />
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>

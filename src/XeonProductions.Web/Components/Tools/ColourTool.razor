@@ -1,0 +1,39 @@
+@*
+    One colour in three notations. Any of the text fields accepts input; the picker and the
+    swatch follow whatever parses.
+*@
+
+<div class="tool" data-tool="colour">
+    <div class="tool-colour-head">
+        <div class="tool-swatch" data-colour-swatch aria-hidden="true"></div>
+
+        <div class="tool-field">
+            <label for="colour-pick">Pick a colour</label>
+            <input type="color" id="colour-pick" data-colour-picker value="#1e73be" />
+        </div>
+    </div>
+
+    <div class="tool-field">
+        <label for="colour-hex">HEX</label>
+        <input type="text" id="colour-hex" data-colour="hex" spellcheck="false"
+               autocomplete="off" placeholder="#1e73be" />
+    </div>
+
+    <div class="tool-field">
+        <label for="colour-rgb">RGB</label>
+        <input type="text" id="colour-rgb" data-colour="rgb" spellcheck="false"
+               autocomplete="off" placeholder="rgb(30, 115, 190)" />
+    </div>
+
+    <div class="tool-field">
+        <label for="colour-hsl">HSL</label>
+        <input type="text" id="colour-hsl" data-colour="hsl" spellcheck="false"
+               autocomplete="off" placeholder="hsl(208, 73%, 43%)" />
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>

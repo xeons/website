@@ -1,0 +1,45 @@
+@*
+    JSON formatting and validation. A parse failure reports the offset the parser stopped at
+    along with the line and column, which is the part browsers leave out.
+*@
+
+<div class="tool" data-tool="json">
+    <div class="tool-io">
+        <div class="tool-field">
+            <label for="json-in">Input</label>
+            <textarea id="json-in" data-tool-input rows="12" spellcheck="false"
+                      placeholder='{"paste":"some JSON here"}'></textarea>
+        </div>
+        <div class="tool-field">
+            <label for="json-out">Output</label>
+            <textarea id="json-out" data-tool-output rows="12" spellcheck="false" readonly></textarea>
+        </div>
+    </div>
+
+    <div class="tool-options">
+        <label class="tool-inline">
+            Indent
+            <select data-tool-option="indent">
+                <option value="2">2 spaces</option>
+                <option value="4">4 spaces</option>
+                <option value="tab">Tab</option>
+            </select>
+        </label>
+
+        <label class="tool-check">
+            <input type="checkbox" data-tool-option="sort" />
+            Sort object keys
+        </label>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn" data-tool-run="format">Format</button>
+        <button type="button" class="btn btn-secondary" data-tool-run="minify">Minify</button>
+        <button type="button" class="btn btn-secondary" data-tool-run="validate">Validate</button>
+        <button type="button" class="btn btn-secondary" data-tool-swap>Swap</button>
+        <button type="button" class="btn btn-secondary" data-tool-copy>Copy output</button>
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>

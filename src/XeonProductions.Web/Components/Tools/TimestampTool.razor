@@ -1,0 +1,62 @@
+@*
+    Epoch to date and back. Whether an entered number is seconds or milliseconds is decided by
+    its magnitude, which is what every timestamp of the last few decades makes unambiguous.
+*@
+
+<div class="tool" data-tool="timestamp">
+    <div class="tool-field">
+        <label for="ts-epoch">Unix timestamp</label>
+        <input type="text" id="ts-epoch" data-ts="epoch" spellcheck="false" autocomplete="off"
+               placeholder="1700000000" />
+        <p class="tool-hint" data-ts="unit"></p>
+    </div>
+
+    <div class="tool-field">
+        <label for="ts-date">Date and time (your local zone)</label>
+        <input type="datetime-local" id="ts-date" data-ts="date" step="1" />
+    </div>
+
+    <div class="tool-table-wrap">
+        <table class="tool-table">
+            <tbody>
+                <tr>
+                    <th scope="row">Seconds</th>
+                    <td><code data-ts-out="seconds" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr>
+                    <th scope="row">Milliseconds</th>
+                    <td><code data-ts-out="millis" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr>
+                    <th scope="row">ISO 8601 (UTC)</th>
+                    <td><code data-ts-out="iso" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr>
+                    <th scope="row">UTC</th>
+                    <td><code data-ts-out="utc" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr>
+                    <th scope="row">Local</th>
+                    <td><code data-ts-out="local" data-copy-text></code></td>
+                    <td><button type="button" class="btn btn-secondary btn-sm" data-tool-copy-scope>Copy</button></td>
+                </tr>
+                <tr>
+                    <th scope="row">Relative</th>
+                    <td><span data-ts-out="relative"></span></td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn" data-tool-run="now">Use the current time</button>
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>

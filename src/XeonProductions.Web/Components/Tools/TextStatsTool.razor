@@ -1,0 +1,29 @@
+@*
+    Counts as you type. Characters are counted twice over: once as the code points a person
+    sees, and once as the UTF-8 bytes a database column or a size limit will actually see.
+*@
+
+<div class="tool" data-tool="text-stats">
+    <div class="tool-field">
+        <label for="stats-in">Input</label>
+        <textarea id="stats-in" data-tool-input rows="12" spellcheck="false"
+                  placeholder="Paste or type here"></textarea>
+    </div>
+
+    <div class="tool-stats" data-stats-grid>
+        <div class="tool-stat"><span class="tool-stat-value" data-stat="characters">0</span><span class="tool-stat-label">Characters</span></div>
+        <div class="tool-stat"><span class="tool-stat-value" data-stat="charactersNoSpaces">0</span><span class="tool-stat-label">Without spaces</span></div>
+        <div class="tool-stat"><span class="tool-stat-value" data-stat="words">0</span><span class="tool-stat-label">Words</span></div>
+        <div class="tool-stat"><span class="tool-stat-value" data-stat="sentences">0</span><span class="tool-stat-label">Sentences</span></div>
+        <div class="tool-stat"><span class="tool-stat-value" data-stat="paragraphs">0</span><span class="tool-stat-label">Paragraphs</span></div>
+        <div class="tool-stat"><span class="tool-stat-value" data-stat="lines">0</span><span class="tool-stat-label">Lines</span></div>
+        <div class="tool-stat"><span class="tool-stat-value" data-stat="bytes">0</span><span class="tool-stat-label">UTF-8 bytes</span></div>
+        <div class="tool-stat"><span class="tool-stat-value" data-stat="readingTime">0s</span><span class="tool-stat-label">Reading time</span></div>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>

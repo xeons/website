@@ -1,0 +1,44 @@
+@*
+    Percent-encoding. The component mode escapes the reserved characters as well, which is
+    what a value going into a query string needs; the full-URI mode leaves the structure
+    of an address intact.
+*@
+
+<div class="tool" data-tool="url">
+    <div class="tool-io">
+        <div class="tool-field">
+            <label for="url-in">Input</label>
+            <textarea id="url-in" data-tool-input rows="7" spellcheck="false"
+                      placeholder="Text to encode, or an encoded string to decode"></textarea>
+        </div>
+        <div class="tool-field">
+            <label for="url-out">Output</label>
+            <textarea id="url-out" data-tool-output rows="7" spellcheck="false" readonly></textarea>
+        </div>
+    </div>
+
+    <div class="tool-options">
+        <label class="tool-inline">
+            Mode
+            <select data-tool-option="mode">
+                <option value="component">Component: escapes &amp; ? / : # too</option>
+                <option value="uri">Full URI: keeps the address structure</option>
+            </select>
+        </label>
+
+        <label class="tool-check">
+            <input type="checkbox" data-tool-option="plus" />
+            Treat <code>+</code> as a space when decoding (HTML form encoding)
+        </label>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn" data-tool-run="encode">Encode</button>
+        <button type="button" class="btn btn-secondary" data-tool-run="decode">Decode</button>
+        <button type="button" class="btn btn-secondary" data-tool-swap>Swap</button>
+        <button type="button" class="btn btn-secondary" data-tool-copy>Copy output</button>
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+</div>
