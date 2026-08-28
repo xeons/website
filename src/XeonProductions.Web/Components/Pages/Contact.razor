@@ -84,7 +84,9 @@
     // The bound property carries no initializer: binding a form post replaces it wholesale,
     // so an initializer would simply be discarded (BL0008). Everything else reads Model,
     // which fills one in on first use.
-    [SupplyParameterFromForm(FormName = "contact")]
+    // Name must match the prefix the inputs render. They bind to Model.Name, so the browser
+    // posts "Model.Name"; without Name the binder would look under "Input" instead.
+    [SupplyParameterFromForm(FormName = "contact", Name = "Model")]
     private ContactModel? Input { get; set; }
 
     private ContactModel Model => Input ??= new();

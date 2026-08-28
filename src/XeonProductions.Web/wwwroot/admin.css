@@ -380,7 +380,10 @@
     color: var(--admin-text);
 }
 
-/* One control height everywhere, so a select never sits proud of an input. */
+/* One control height everywhere, so a select never sits proud of an input.
+   input:not([type]) is load-bearing: a bare <input @bind> renders no type
+   attribute, so it would match none of the selectors below. */
+.admin-card input:not([type]),
 .admin-card input[type='text'],
 .admin-card input[type='email'],
 .admin-card input[type='url'],

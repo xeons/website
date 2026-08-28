@@ -129,12 +129,21 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter("contact-form", limiter =>
-    {
-        limiter.PermitLimit = 5;
-        limiter.Window = TimeSpan.FromMinutes(10);
-        limiter.QueueLimit = 0;
-    });
+    // Applies to the contact page endpoint, which serves the form as well as receiving it.
+    // Reading is left unlimited: a shared window over GETs meant a handful of visitors
+    // looking at the page locked everyone out of it. Submissions are counted per address so
+    // one sender cannot spend everybody's allowance.
+    options.AddPolicy("contact-form", http =>
+        !HttpMethods.IsPost(http.Request.Method)
+            ? RateLimitPartition.GetNoLimiter("read")
+            : RateLimitPartition.GetFixedWindowLimiter(
+                http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 5,
+                    Window = TimeSpan.FromMinutes(10),
+                    QueueLimit = 0
+                }));
 
     // The beacon is public and unauthenticated. A page reports a handful of times at most,
     // so this only stops a client sending thousands.

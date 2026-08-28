@@ -28,12 +28,15 @@ public class WordPressMarkupCleaner(ILogger<WordPressMarkupCleaner> logger) : IW
 
         // Nothing plugin-shaped in here, so leave the markup exactly as it was.
         if (!html.Contains("crayon", StringComparison.OrdinalIgnoreCase)
-            && !html.Contains("urvanov", StringComparison.OrdinalIgnoreCase))
+            && !html.Contains("urvanov", StringComparison.OrdinalIgnoreCase)
+            && !html.Contains("wpcf7", StringComparison.OrdinalIgnoreCase))
         {
             return html;
         }
 
         var document = _parser.ParseDocument($"<body>{html}</body>");
+
+        RemoveContactForms(document);
 
         foreach (var block in FindHighlighterBlocks(document))
         {
@@ -59,6 +62,37 @@ public class WordPressMarkupCleaner(ILogger<WordPressMarkupCleaner> logger) : IW
         }
 
         return document.Body?.InnerHtml ?? html;
+    }
+
+    /// <summary>
+    /// Removes Contact Form 7 forms.
+    ///
+    /// The markup posts to a WordPress endpoint that does not exist here, so it can only
+    /// ever fail, and the site has its own contact form. Nothing is recoverable from it: the
+    /// fields are a plugin configuration rather than content.
+    /// </summary>
+    private void RemoveContactForms(IDocument document)
+    {
+        foreach (var form in document.QuerySelectorAll(".wpcf7, .wpcf7-form").ToList())
+        {
+            // A nested match is removed with its parent; skip it rather than touch a
+            // detached node.
+            if (form.Closest("body") is null) continue;
+
+            form.Remove();
+            logger.LogInformation("Removed an imported Contact Form 7 block.");
+        }
+
+        // The plugin brackets its form with empty paragraphs, which would otherwise be all
+        // that is left of the page.
+        foreach (var paragraph in document.QuerySelectorAll("p").ToList())
+        {
+            if (paragraph.ChildElementCount == 0
+                && string.IsNullOrWhiteSpace(paragraph.TextContent))
+            {
+                paragraph.Remove();
+            }
+        }
     }
 
     /// <summary>
