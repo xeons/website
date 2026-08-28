@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.RegularExpressions;
+using AngleSharp.Html.Parser;
 using Ganss.Xss;
 
 namespace XeonProductions.Infrastructure.Services;
@@ -11,6 +12,7 @@ namespace XeonProductions.Infrastructure.Services;
 public partial class HtmlService : IHtmlService
 {
     private readonly HtmlSanitizer _sanitizer;
+    private readonly HtmlParser _parser = new();
 
     public HtmlService()
     {
@@ -59,7 +61,63 @@ public partial class HtmlService : IHtmlService
         && EmbedHosts.Contains(uri.Host, StringComparer.OrdinalIgnoreCase);
 
     public string Sanitize(string? html) =>
-        string.IsNullOrWhiteSpace(html) ? string.Empty : _sanitizer.Sanitize(html);
+        string.IsNullOrWhiteSpace(html) ? string.Empty : StripEditorArtifacts(_sanitizer.Sanitize(html));
+
+    /// <summary>
+    /// Class names the WordPress editor emitted that mean nothing here.
+    ///
+    /// Only the ones with no effect are listed. Alignment, the image and table block
+    /// wrappers, the rounded variation and caption classes all still describe how an entry
+    /// was laid out and are implemented in the stylesheet, so they stay.
+    /// </summary>
+    private static readonly HashSet<string> EditorNoise = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "wp-block-heading", "wp-block-list", "wp-block-paragraph", "wp-block-quote",
+        "wp-block-code", "wp-block-preformatted", "wp-block-separator", "wp-block-group",
+        "size-full", "size-large", "size-medium", "size-thumbnail", "is-style-default"
+    };
+
+    /// <summary>
+    /// Rewrites class attributes, dropping names that carried meaning only inside WordPress.
+    ///
+    /// Walks the document rather than matching text. A code sample showing WordPress markup
+    /// arrives entity encoded, but the sanitiser has already decoded it into a text node by
+    /// this point, so a textual rewrite would reach inside samples and edit them. Only real
+    /// attributes are touched here. The markup is returned untouched when nothing matched,
+    /// so content without artifacts is never reserialised.
+    /// </summary>
+    private string StripEditorArtifacts(string html)
+    {
+        if (!html.Contains("class=", StringComparison.OrdinalIgnoreCase)) return html;
+
+        var document = _parser.ParseDocument($"<body>{html}</body>");
+        if (document.Body is null) return html;
+
+        var changed = false;
+
+        foreach (var element in document.Body.QuerySelectorAll("[class]").ToList())
+        {
+            var kept = element.ClassList.Where(Meaningful).ToArray();
+            if (kept.Length == element.ClassList.Length) continue;
+
+            changed = true;
+
+            if (kept.Length == 0)
+            {
+                element.RemoveAttribute("class");
+            }
+            else
+            {
+                element.ClassName = string.Join(' ', kept);
+            }
+        }
+
+        return changed ? document.Body.InnerHtml : html;
+    }
+
+    /// <summary>An attachment id names a row in a database that is no longer consulted.</summary>
+    private static bool Meaningful(string token) =>
+        !EditorNoise.Contains(token) && !AttachmentId().IsMatch(token);
 
     public string ToPlainText(string? html)
     {
@@ -116,6 +174,9 @@ public partial class HtmlService : IHtmlService
             return $"<h{level}{attrs} id=\"{candidate}\">{inner}</h{level}>";
         });
     }
+
+    [GeneratedRegex("^wp-image-[0-9]+$", RegexOptions.IgnoreCase)]
+    private static partial Regex AttachmentId();
 
     [GeneratedRegex(@"<(script|style)[^>]*>.*?</\1>", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
     private static partial Regex ScriptOrStyle();

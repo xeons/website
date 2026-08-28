@@ -1058,3 +1058,91 @@ pre code .css-property-name { color: var(--code-preprocessor); }
     white-space: pre;
     color: var(--text-muted);
 }
+
+/* ------------------------------------------------ imported WordPress ----- */
+/* Content brought over from WordPress carries the editor's layout classes.
+   They are the only surviving record of how an entry was arranged, so the ones
+   that mean something are implemented here. The ones that meant nothing
+   outside WordPress are stripped on save instead. */
+
+/* Contains the floats below, so a tall image cannot spill into the next entry
+   or past the article footer. */
+.entry-content { display: flow-root; }
+
+.entry-content .alignleft {
+    float: left;
+    margin: .3em 1.6em 1.2em 0;
+}
+
+.entry-content .alignright {
+    float: right;
+    margin: .3em 0 1.2em 1.6em;
+}
+
+.entry-content .aligncenter {
+    display: block;
+    float: none;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.entry-content .alignnone {
+    display: block;
+    float: none;
+}
+
+/* The block editor wraps a figure in this div whenever a style variation is
+   applied. The wrapper holds nothing but the float, so it collapses to no
+   height; carrying the float up to it keeps the spacing predictable. */
+.entry-content .wp-block-image { margin: 0 0 1.4em; }
+.entry-content .wp-block-image > figure { margin: 0; }
+
+.entry-content .wp-block-image:has(> .alignleft) {
+    float: left;
+    margin: .3em 1.6em 1.2em 0;
+}
+
+.entry-content .wp-block-image:has(> .alignright) {
+    float: right;
+    margin: .3em 0 1.2em 1.6em;
+}
+
+.entry-content .wp-block-image:has(> .alignleft) > figure,
+.entry-content .wp-block-image:has(> .alignright) > figure { float: none; }
+
+/* The editor writes a fixed height inline beside the width. Once the width is
+   capped on a narrow screen that height stops matching and the image is
+   stretched, so the aspect ratio has to win over the inline value. */
+.entry-content img[style*="height"] { height: auto !important; }
+
+/* The rounded variation is a circle in the block editor, not a soft corner. */
+.entry-content .is-style-rounded img { border-radius: 50%; }
+
+/* Captions from before the block editor, which used a div rather than figure. */
+.entry-content .wp-caption { max-width: 100%; }
+.entry-content .wp-caption img { display: block; }
+
+.entry-content .wp-caption-text {
+    font-size: .85rem;
+    color: var(--text-muted);
+    margin-top: .5em;
+}
+
+/* A wide table scrolls inside its own block rather than stretching the column. */
+.entry-content .wp-block-table { overflow-x: auto; }
+
+@media (max-width: 768px) {
+    /* A floated image beside text leaves neither enough room on a phone, so
+       both alignments become ordinary centred blocks. */
+    .entry-content .alignleft,
+    .entry-content .alignright,
+    .entry-content .wp-block-image:has(> .alignleft),
+    .entry-content .wp-block-image:has(> .alignright) {
+        float: none;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .entry-content .alignleft img,
+    .entry-content .alignright img { margin-left: auto; margin-right: auto; }
+}
