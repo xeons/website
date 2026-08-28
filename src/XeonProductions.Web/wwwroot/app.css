@@ -496,8 +496,9 @@ th { font-weight: 600; background: var(--bg-subtle); }
     padding: var(--gutter);
 }
 
-.site-content.one-container .entry,
-.site-content.one-container .widget {
+/* Entries flatten into the shared surface. Widgets do not: the sidebar keeps its
+   boxes so the column still reads as a column. */
+.site-content.one-container .entry {
     background: none;
     border: 0;
     border-radius: 0;
@@ -519,18 +520,7 @@ th { font-weight: 600; background: var(--bg-subtle); }
 
 .site-content.one-container .entry + .entry { padding-top: var(--gutter); }
 
-.site-content.one-container .widget { margin-bottom: 32px; }
 .site-content.one-container .widget:last-child { margin-bottom: 0; }
-
-/* No box to cap here, so the header keeps its rule but loses the band. */
-.site-content.one-container .widget-title {
-    background: none;
-    border-radius: 0;
-    padding: 0 0 .5em;
-    margin-bottom: .8em;
-}
-
-.site-content.one-container .widget-content { padding: 0; }
 
 /* Inside the container this text sits on the surface, not the page background, so the
    contrast tokens derived from the page background do not apply. */
@@ -1299,14 +1289,6 @@ input:not([type]), input[type='text'], input[type='email'], input[type='url'],
 input[type='password'], input[type='search'], input[type='number'],
 input[type='datetime-local'], select, textarea {
     transition: border-color var(--fast) linear, box-shadow var(--medium) var(--ease);
-}
-
-/* One visible focus ring for anything reached by keyboard, drawn outside the
-   element so it never shifts the layout. */
-a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 2px;
 }
 
 /* Entries arrive with a short rise. Only the first few are staggered: past that
