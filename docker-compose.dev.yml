@@ -46,6 +46,7 @@ services:
 
       Media__StorageRoot: /app/media
       Downloads__StorageRoot: /app/downloads
+      Stats__GeoDatabasePath: /app/geoip/GeoLite2-Country.mmdb
       DataProtection__KeysPath: /app/keys
 
       Seed__AdminEmail: ${ADMIN_EMAIL:-admin@localhost}
@@ -56,6 +57,7 @@ services:
     volumes:
       - dev-media-data:/app/media
       - dev-downloads-data:/app/downloads
+      - ./deploy/geoip:/app/geoip:ro
       - dev-keys-data:/app/keys
 
 volumes:

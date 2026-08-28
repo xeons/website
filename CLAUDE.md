@@ -145,6 +145,11 @@ Public pages render as static SSR. Admin screens opt into `InteractiveServer`.
   they are served only through the download endpoints.
 - Anything reaching a response header from user input is stripped of control characters
   first.
+- Statistics never store an address or a user agent. A visitor is a hash of those plus the
+  date, so the value cannot be reversed and does not survive the day. Do not add a column
+  that would undo that.
+- Nothing writes to the database during a page request on the public site. Statistics go
+  through a bounded queue drained by a background service.
 - Database changes go through an EF migration. Do not hand-edit a generated migration.
 
 ## Before calling a change done

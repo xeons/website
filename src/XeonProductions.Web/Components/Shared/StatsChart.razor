@@ -1,0 +1,58 @@
+@*
+    Time series drawn as inline SVG.
+
+    Server rendered rather than handed to a charting library: the content security policy
+    allows no external script, the data is already on the server, and a chart of a few dozen
+    points needs nothing that SVG cannot express. It also draws with JavaScript turned off.
+*@
+
+@if (Points.Count == 0)
+{
+    <div class="empty-state">Nothing recorded in this range.</div>
+}
+else
+{
+    <div class="stats-chart">
+        <svg viewBox="0 0 @Width @Height" preserveAspectRatio="none" role="img"
+             aria-label="@Label">
+            @for (var i = 0; i < Points.Count; i++)
+            {
+                var point = Points[i];
+                var barWidth = Width / (double)Points.Count;
+                var x = i * barWidth;
+                var barHeight = Peak == 0 ? 0 : point.Views / (double)Peak * (Height - 2);
+
+                <rect x="@F(x + barWidth * 0.15)"
+                      y="@F(Height - barHeight)"
+                      width="@F(barWidth * 0.7)"
+                      height="@F(Math.Max(barHeight, point.Views > 0 ? 1 : 0))"
+                      class="bar">
+                    <title>@point.Day.ToString("d MMM yyyy"): @point.Views views, @point.Visitors visitors</title>
+                </rect>
+            }
+        </svg>
+
+        <div class="stats-chart-axis">
+            <span>@Points[0].Day.ToString("d MMM")</span>
+            <span class="peak">peak @Peak</span>
+            <span>@Points[^1].Day.ToString("d MMM")</span>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<StatsPoint> Points { get; set; } = [];
+
+    [Parameter]
+    public string Label { get; set; } = "Page views per day";
+
+    private const int Width = 720;
+    private const int Height = 160;
+
+    private int Peak => Points.Count == 0 ? 0 : Points.Max(p => p.Views);
+
+    /// <summary>Invariant formatting, so a comma decimal separator cannot corrupt the path.</summary>
+    private static string F(double value) =>
+        value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+}

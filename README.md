@@ -473,3 +473,78 @@ it allows the editor to be taken under GPL v3, and GPL v3 and AGPL v3 are writte
 being combined with each other. A GPL v2 only dependency would not have been compatible.
 
 None of this is legal advice.
+
+## Statistics
+
+Built in, at **Statistics** in the admin. Nothing is sent anywhere: the site records its own
+traffic into its own database.
+
+Page views, visitors, visits, average time on page, bounce rate and a live count, with
+breakdowns by page, referrer, entry page, country, browser, operating system and device.
+
+### How a view is recorded
+
+Capture is in two halves because neither half can do the job alone.
+
+The **server** records the view, in middleware, for any HTML page it returns with a 200. That
+works with JavaScript off, is unaffected by blockers, and counts the visitors that a script
+based tracker never hears from. What it cannot see is how long the page stayed open.
+
+The **browser** reports that. A small script measures time while the page is visible and sends
+it with `sendBeacon` when the page is hidden or closed, which survives the page going away
+where an ordinary request would be cancelled. Views with no report keep a duration of zero and
+are left out of the average rather than dragging it down.
+
+Neither half writes to the database during the request. Views go onto a bounded queue and a
+background service writes them in batches, so no page waits on a database round trip. If the
+queue fills, views are dropped rather than made to wait: statistics are not worth slowing the
+site for.
+
+### No cookies and no addresses
+
+There is no cookie, no local storage and no identifier that survives the day.
+
+A visitor is counted as a hash of their address, their browser string and a secret, together
+with the current date. The address itself is never written down, the hash cannot be reversed,
+and because the date is part of it the same visitor hashes to something different tomorrow.
+There is no column in `page_views` that holds an address or a user agent.
+
+The cost of that is honest and worth stating: **visitors are counted per day.** Somebody
+returning on Tuesday and Thursday counts twice, because there is deliberately no way to know
+they were the same person. Sessions work the same way, from a rolling thirty minute window.
+
+Crawlers are excluded, and your own visits are not recorded while you are signed in.
+
+### Country data
+
+Country needs a lookup database, which is not shipped: MaxMind licence it separately and
+refresh it on their own schedule. Until one is configured the admin says so and every other
+figure works as normal.
+
+To enable it, take a free GeoLite2 account, download **GeoLite2-Country**, and put the
+`.mmdb` file in `deploy/geoip/`. Compose mounts that directory read only at `/app/geoip` and
+`Stats__GeoDatabasePath` already points at it. The file is gitignored; refresh it on
+MaxMind's schedule with `geoipupdate` or by hand.
+
+A missing or unreadable file is not an error. It is logged once at startup and country stays
+empty.
+
+### Settings
+
+Under `Stats` in configuration:
+
+| Key | Default | Effect |
+| --- | --- | --- |
+| `Enabled` | `true` | Turns capture off. Existing figures still display. |
+| `GeoDatabasePath` | blank | GeoLite2 country database. Blank disables country. |
+| `RetentionDays` | `400` | Views older than this are pruned nightly. `0` keeps everything. |
+| `SessionWindowMinutes` | `30` | A longer gap starts a new visit. |
+| `MaxDurationSeconds` | `1800` | Ceiling on a reported dwell time, so a forgotten tab cannot skew it. |
+| `IgnoredPathPrefixes` | admin, media, download, health, api | Never recorded. |
+| `IgnoreAuthenticated` | `true` | Skip views from signed-in accounts. |
+
+The chart is inline SVG rendered on the server. No charting library is loaded, there is
+nothing for the content security policy to allow, and it draws with JavaScript off.
+
+The **Analytics snippet** setting is untouched and still works, if you want to run something
+alongside this.

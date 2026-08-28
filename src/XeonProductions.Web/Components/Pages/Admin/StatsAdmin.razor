@@ -1,0 +1,258 @@
+@page "/admin/stats"
+@layout Layout.AdminLayout
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = "CanEditContent")]
+@inject IStatsService Stats
+@inject IGeoLocator Geo
+@inject IOptions<StatsOptions> StatsOptions
+
+<PageTitle>Statistics</PageTitle>
+
+<AdminShell Title="Statistics" Subtitle="@RangeLabel">
+    <Actions>
+        <select @bind="_days" @bind:after="LoadAsync" class="range-select">
+            <option value="1">Today</option>
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">Last year</option>
+        </select>
+    </Actions>
+
+    <ChildContent>
+        @if (!StatsOptions.Value.Enabled)
+        {
+            <div class="notice notice-error" role="alert">
+                Capture is turned off. Existing figures are shown, but nothing new is being
+                recorded. Set <code>Stats:Enabled</code> to re-enable it.
+            </div>
+        }
+
+        @if (_loading)
+        {
+            <div class="empty-state">Loading...</div>
+        }
+        else
+        {
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <span class="stat-value">@_summary.Views.ToString("N0")</span>
+                    <span class="stat-label">Page views</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">@_summary.Visitors.ToString("N0")</span>
+                    <span class="stat-label">Visitors</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">@_summary.Sessions.ToString("N0")</span>
+                    <span class="stat-label">Visits</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">@Duration(_summary.AverageSeconds)</span>
+                    <span class="stat-label">Average time on page</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">@_summary.BounceRate.ToString("P0")</span>
+                    <span class="stat-label">Bounce rate</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">@_active.ToString("N0")</span>
+                    <span class="stat-label">Active now</span>
+                </div>
+            </div>
+
+            <div class="admin-card">
+                <h2>Page views</h2>
+                <StatsChart Points="_series" />
+            </div>
+
+            @if (_summary.Views > 0 && _summary.MeasuredViews == 0)
+            {
+                <div class="notice">
+                    No dwell times have been reported yet, so the average is zero. It is sent
+                    by a small script when a visitor leaves a page, and only appears once
+                    somebody has visited since that script was deployed.
+                </div>
+            }
+
+            <div class="stats-columns">
+                <div class="admin-card">
+                    <h2>Top pages</h2>
+                    @Table(_pages, "Page", showTime: true)
+                </div>
+
+                <div class="admin-card">
+                    <h2>Referrers</h2>
+                    @Table(_referrers, "Source", showTime: false, emptyKey: "Direct / none")
+                </div>
+
+                <div class="admin-card">
+                    <h2>Entry pages</h2>
+                    @Table(_entries, "Landed on", showTime: false)
+                </div>
+
+                <div class="admin-card">
+                    <h2>Countries</h2>
+                    @if (!Geo.IsAvailable)
+                    {
+                        <p class="row-sub">
+                            No geolocation database is configured, so country is not recorded.
+                            Point <code>Stats:GeoDatabasePath</code> at a GeoLite2 country
+                            database to enable it.
+                        </p>
+                    }
+                    else
+                    {
+                        @Table(_countries, "Country", showTime: false, emptyKey: "Unknown")
+                    }
+                </div>
+
+                <div class="admin-card">
+                    <h2>Browsers</h2>
+                    @Table(_browsers, "Browser", showTime: false, emptyKey: "Unknown")
+                </div>
+
+                <div class="admin-card">
+                    <h2>Systems</h2>
+                    @Table(_systems, "Operating system", showTime: false, emptyKey: "Unknown")
+                </div>
+
+                <div class="admin-card">
+                    <h2>Devices</h2>
+                    @Table(_devices, "Device", showTime: false, emptyKey: "Unknown")
+                </div>
+            </div>
+
+            <div class="notice">
+                Visitors are counted with a hash of address, browser and a salt that changes
+                daily. Nothing identifying is stored and no cookie is set, so a visitor
+                returning tomorrow counts again. Bots are excluded, and your own visits are
+                not recorded while you are signed in.
+            </div>
+        }
+    </ChildContent>
+</AdminShell>
+
+@code {
+    private int _days = 30;
+    private bool _loading = true;
+
+    private StatsSummary _summary = StatsSummary.Empty;
+    private IReadOnlyList<StatsPoint> _series = [];
+    private IReadOnlyList<StatsBreakdown> _pages = [];
+    private IReadOnlyList<StatsBreakdown> _referrers = [];
+    private IReadOnlyList<StatsBreakdown> _entries = [];
+    private IReadOnlyList<StatsBreakdown> _countries = [];
+    private IReadOnlyList<StatsBreakdown> _browsers = [];
+    private IReadOnlyList<StatsBreakdown> _systems = [];
+    private IReadOnlyList<StatsBreakdown> _devices = [];
+    private int _active;
+
+    private DateTimeOffset To => DateTimeOffset.UtcNow.Date.AddDays(1);
+    private DateTimeOffset From => To.AddDays(-_days);
+
+    private string RangeLabel =>
+        _days == 1 ? "Today" : $"{From:d MMM yyyy} to {To.AddDays(-1):d MMM yyyy}";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        var from = From;
+        var to = To;
+
+        _summary = await Stats.SummaryAsync(from, to);
+        _series = await Stats.SeriesAsync(from, to);
+        _pages = await Stats.TopPagesAsync(from, to, 15);
+        _referrers = await Stats.TopReferrersAsync(from, to, 15);
+        _entries = await Stats.EntryPagesAsync(from, to, 10);
+        _countries = await Stats.TopCountriesAsync(from, to, 15);
+        _browsers = await Stats.TopBrowsersAsync(from, to, 10);
+        _systems = await Stats.TopOperatingSystemsAsync(from, to, 10);
+        _devices = await Stats.DevicesAsync(from, to);
+        _active = await Stats.ActiveVisitorsAsync(TimeSpan.FromMinutes(5));
+
+        _loading = false;
+    }
+
+    private RenderFragment Table(
+        IReadOnlyList<StatsBreakdown> rows, string heading, bool showTime,
+        string emptyKey = "Unknown") => builder =>
+    {
+        if (rows.Count == 0)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "empty-state");
+            builder.AddContent(2, "Nothing recorded.");
+            builder.CloseElement();
+            return;
+        }
+
+        var total = rows.Sum(r => r.Count);
+
+        builder.OpenElement(10, "table");
+        builder.AddAttribute(11, "class", "admin-table stats-table");
+
+        builder.OpenElement(20, "thead");
+        builder.OpenElement(21, "tr");
+        builder.OpenElement(22, "th");
+        builder.AddContent(23, heading);
+        builder.CloseElement();
+        builder.OpenElement(24, "th");
+        builder.AddContent(25, "Views");
+        builder.CloseElement();
+        if (showTime)
+        {
+            builder.OpenElement(26, "th");
+            builder.AddContent(27, "Avg time");
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(30, "tbody");
+        var seq = 100;
+        foreach (var row in rows)
+        {
+            builder.OpenElement(seq++, "tr");
+
+            builder.OpenElement(seq++, "td");
+            builder.AddAttribute(seq++, "class", "row-title");
+            // A share bar behind the label, so the shape of the distribution reads at a glance.
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "stats-bar");
+            builder.AddAttribute(seq++, "style",
+                $"width:{(total == 0 ? 0 : row.Count * 100.0 / total).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}%");
+            builder.CloseElement();
+            builder.AddContent(seq++, string.IsNullOrEmpty(row.Key) ? emptyKey : row.Key);
+            builder.CloseElement();
+
+            builder.OpenElement(seq++, "td");
+            builder.AddAttribute(seq++, "class", "row-sub");
+            builder.AddContent(seq++, row.Count.ToString("N0"));
+            builder.CloseElement();
+
+            if (showTime)
+            {
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, "class", "row-sub");
+                builder.AddContent(seq++, row.AverageSeconds > 0 ? Duration(row.AverageSeconds) : "-");
+                builder.CloseElement();
+            }
+
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    private static string Duration(double seconds) => seconds switch
+    {
+        <= 0 => "-",
+        < 60 => $"{seconds:0}s",
+        < 3600 => $"{(int)(seconds / 60)}m {(int)(seconds % 60):00}s",
+        _ => $"{(int)(seconds / 3600)}h {(int)(seconds % 3600 / 60):00}m"
+    };
+}

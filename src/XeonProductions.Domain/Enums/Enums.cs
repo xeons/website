@@ -50,6 +50,18 @@ public enum HotlinkProtection
     Strict = 2
 }
 
+/// <summary>The kind of client a page view came from.</summary>
+public enum DeviceType
+{
+    Unknown = 0,
+    Desktop = 1,
+    Mobile = 2,
+    Tablet = 3,
+
+    /// <summary>A crawler or other automated client. Excluded from the reports.</summary>
+    Bot = 4
+}
+
 public enum MenuLocation
 {
     Primary = 0,

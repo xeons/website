@@ -35,6 +35,7 @@ public static class DependencyInjection
 
         services.Configure<MediaOptions>(config.GetSection("Media"));
         services.Configure<DownloadOptions>(config.GetSection("Downloads"));
+        services.Configure<StatsOptions>(config.GetSection("Stats"));
         services.Configure<SmtpOptions>(config.GetSection("Smtp"));
 
         services.AddScoped<ISiteSettingsService, SiteSettingsService>();
@@ -42,6 +43,8 @@ public static class DependencyInjection
         services.AddScoped<INavigationService, NavigationService>();
         services.AddScoped<IMediaService, MediaService>();
         services.AddScoped<IDownloadService, DownloadService>();
+        services.AddScoped<IStatsService, StatsService>();
+        services.AddScoped<IVisitorHasher, VisitorHasher>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IFeedReader, FeedReader>();
 
@@ -52,6 +55,9 @@ public static class DependencyInjection
             client.DefaultRequestHeaders.UserAgent.ParseAdd("XeonProductions/1.0 (+feed reader)");
             client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
         });
+
+        // Opens the geolocation database once and reads it from every request.
+        services.AddSingleton<IGeoLocator, MaxMindGeoLocator>();
 
         // Holds a cached map and creates its own scope, so it is safe before routing.
         services.AddSingleton<IRedirectMap, RedirectMap>();

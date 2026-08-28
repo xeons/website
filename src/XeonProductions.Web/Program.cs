@@ -33,6 +33,16 @@ builder.Services.PostConfigure<MediaOptions>(options =>
     }
 });
 
+builder.Services.PostConfigure<StatsOptions>(options =>
+{
+    if (!string.IsNullOrWhiteSpace(options.GeoDatabasePath)
+        && !Path.IsPathRooted(options.GeoDatabasePath))
+    {
+        options.GeoDatabasePath =
+            Path.Combine(builder.Environment.ContentRootPath, options.GeoDatabasePath);
+    }
+});
+
 builder.Services.PostConfigure<DownloadOptions>(options =>
 {
     if (!Path.IsPathRooted(options.StorageRoot))
@@ -90,6 +100,11 @@ builder.Services.AddScoped<ThemeCssBuilder>();
 
 // The signer is stateless; the traffic guard holds counters shared across all requests.
 builder.Services.AddSingleton<IDownloadLinkSigner, DownloadLinkSigner>();
+
+// One queue shared by every request, drained by the background writer.
+builder.Services.AddSingleton<StatsRecorder>();
+builder.Services.AddSingleton<IStatsRecorder>(sp => sp.GetRequiredService<StatsRecorder>());
+builder.Services.AddHostedService<StatsWriter>();
 builder.Services.AddSingleton<IDownloadTrafficGuard, DownloadTrafficGuard>();
 
 builder.Services.AddResponseCompression(options =>
@@ -120,6 +135,18 @@ builder.Services.AddRateLimiter(options =>
         limiter.Window = TimeSpan.FromMinutes(10);
         limiter.QueueLimit = 0;
     });
+
+    // The beacon is public and unauthenticated. A page reports a handful of times at most,
+    // so this only stops a client sending thousands.
+    options.AddPolicy("stats-beacon", http =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
 
     // Partitioned by address, so one caller cannot spend everyone's allowance. The limits on
     // bytes transferred are separate and live in the site settings.
@@ -187,6 +214,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
+// After authentication so a signed-in admin can be excluded, and around the endpoints so
+// the status and content type are known by the time a view is recorded.
+app.UseStats();
+
 // Serves wwwroot and the framework's own assets, including blazor.web.js, from the
 // build-generated manifest. UseStaticFiles alone cannot: the framework files are not
 // physical files under wwwroot, and the manifest is only wired up in Development.
@@ -199,6 +230,7 @@ app.MapSitemapEndpoints();
 app.MapAccountEndpoints();
 app.MapMediaEndpoints();
 app.MapDownloadEndpoints();
+app.MapStatsEndpoints();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

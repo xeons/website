@@ -39,6 +39,7 @@ services:
 
       Media__StorageRoot: /app/media
       Downloads__StorageRoot: /app/downloads
+      Stats__GeoDatabasePath: /app/geoip/GeoLite2-Country.mmdb
       Downloads__MaxFileSizeBytes: ${DOWNLOAD_MAX_BYTES:-2147483648}
       DataProtection__KeysPath: /app/keys
 
@@ -57,6 +58,7 @@ services:
     volumes:
       - media-data:/app/media
       - downloads-data:/app/downloads
+      - ./deploy/geoip:/app/geoip:ro
       - keys-data:/app/keys
     networks:
       - internal

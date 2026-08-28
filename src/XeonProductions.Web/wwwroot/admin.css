@@ -596,3 +596,53 @@
     font-size: 0.85em;
     word-break: break-all;
 }
+
+/* ---------------------------------------------------------- statistics --- */
+
+.range-select { width: auto; min-width: 150px; }
+
+.stats-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 18px;
+}
+
+.stats-columns .admin-card { margin-bottom: 0; }
+
+/* Bars are drawn as a share of the column width, sitting behind the label. */
+.stats-table .row-title { position: relative; }
+
+.stats-bar {
+    position: absolute;
+    left: 0;
+    top: 2px;
+    bottom: 2px;
+    background: rgba(var(--accent-rgb), .12);
+    border-radius: 3px;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.stats-table .row-title { z-index: 1; }
+.stats-table td { position: relative; }
+.stats-table th:not(:first-child), .stats-table td:not(:first-child) { text-align: right; }
+
+.stats-chart svg {
+    display: block;
+    width: 100%;
+    height: 160px;
+    overflow: visible;
+}
+
+.stats-chart .bar { fill: var(--accent); }
+.stats-chart .bar:hover { fill: var(--admin-text); }
+
+.stats-chart-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 0.85em;
+    color: var(--admin-muted);
+}
+
+.stats-chart-axis .peak { font-variant-numeric: tabular-nums; }

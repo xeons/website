@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<MediaItem> Media => Set<MediaItem>();
     public DbSet<Download> Downloads => Set<Download>();
+    public DbSet<PageView> PageViews => Set<PageView>();
     public DbSet<Menu> Menus => Set<Menu>();
     public DbSet<MenuItem> MenuItems => Set<MenuItem>();
     public DbSet<Widget> Widgets => Set<Widget>();
@@ -161,6 +162,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany()
                 .HasForeignKey(x => x.UploadedById)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<PageView>(e =>
+        {
+            e.ToTable("page_views");
+            e.Property(x => x.Path).HasMaxLength(500).IsRequired();
+            e.Property(x => x.SessionId).HasMaxLength(32).IsRequired();
+            e.Property(x => x.VisitorHash).HasMaxLength(32).IsRequired();
+            e.Property(x => x.ReferrerHost).HasMaxLength(255);
+            e.Property(x => x.ReferrerUrl).HasMaxLength(1000);
+            e.Property(x => x.CountryCode).HasMaxLength(2);
+            e.Property(x => x.Browser).HasMaxLength(60);
+            e.Property(x => x.OperatingSystem).HasMaxLength(60);
+
+            // Every report filters on the date first.
+            e.HasIndex(x => x.ViewedAt);
+            e.HasIndex(x => new { x.ViewedAt, x.Path });
+            e.HasIndex(x => x.SessionId);
+
+            // The beacon looks a view up by this.
+            e.HasIndex(x => x.ViewId).IsUnique();
         });
 
         b.Entity<Menu>(e =>

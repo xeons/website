@@ -36,3 +36,7 @@ TestResults/
 [Tt]est[Rr]esults/
 *.coverage
 *.trx
+
+# GeoLite2 database. Licensed separately by MaxMind and refreshed on their
+# schedule, so it is downloaded rather than committed.
+deploy/geoip/

@@ -26,6 +26,12 @@
     <link rel="alternate" type="application/rss+xml"
           title="@($"{_settings.SiteTitle} feed")" href="/feed.xml" />
 
+    @* The id the dwell-time beacon reports against. Absent when the view was not recorded. *@
+    @if (_viewId is not null)
+    {
+        <meta name="x-view-id" content="@_viewId" />
+    }
+
     @* Applies the stored theme before first paint, so there is no flash of the wrong palette. *@
     <script nonce="@_nonce">
         (function () {
@@ -48,6 +54,7 @@
     <script src="@Assets["js/site.js"]"></script>
     <script src="@Assets["js/editor.js"]"></script>
     <script src="@Assets["js/downloads.js"]"></script>
+    <script src="@Assets["js/stats.js"]"></script>
 
     @*
         The TinyMCE Blazor package ships its interop as a JS initializer
@@ -69,14 +76,22 @@
     private string _themeCss = string.Empty;
     private string? _nonce;
     private string? _analyticsMarkup;
+    private string? _viewId;
 
     protected override async Task OnInitializedAsync()
     {
         _settings = await SettingsService.GetAsync();
         _themeCss = await Theme.BuildAsync();
-        _nonce = HttpContextAccessor.HttpContext.GetCspNonce();
 
+        var http = HttpContextAccessor.HttpContext;
+
+        _nonce = http.GetCspNonce();
         _analyticsMarkup = ApplyNonce(_settings.AnalyticsScript, _nonce);
+
+        if (http?.Items.TryGetValue(StatsMiddleware.ViewIdItemKey, out var id) == true)
+        {
+            _viewId = id?.ToString();
+        }
     }
 
     /// <summary>
