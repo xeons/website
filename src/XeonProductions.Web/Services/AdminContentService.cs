@@ -153,6 +153,7 @@ public class AdminContentService(
         page.Template = edited.Template;
         page.MenuOrder = edited.MenuOrder;
         page.ShowTitle = edited.ShowTitle;
+        page.ShowChildLinks = edited.ShowChildLinks;
         page.FeaturedImageId = edited.FeaturedImageId;
 
         page.ParentId = await ResolveParentAsync(db, edited, ct);

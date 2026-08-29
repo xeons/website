@@ -23,6 +23,13 @@ public class Page
     /// <summary>Hide the H1 when the content supplies its own hero heading.</summary>
     public bool ShowTitle { get; set; } = true;
 
+    /// <summary>
+    /// Append a list of the child pages to the content. Off by default: a page that has
+    /// children usually introduces them in its own words, and the automatic list is then
+    /// the same links a second time.
+    /// </summary>
+    public bool ShowChildLinks { get; set; }
+
     public int? FeaturedImageId { get; set; }
     public MediaItem? FeaturedImage { get; set; }
 
