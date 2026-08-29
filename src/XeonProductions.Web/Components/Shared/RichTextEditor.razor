@@ -1,4 +1,5 @@
 @using TinyMCE.Blazor
+@implements IAsyncDisposable
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IMediaService Media
 @inject IJSRuntime JS
@@ -35,6 +36,7 @@
         @if (_ready)
         {
             <Editor @bind-Value="Working"
+                    Id="@_editorId"
                     ScriptSrc="/lib/tinymce/tinymce.min.js"
                     LicenseKey="gpl"
                     Conf="_conf"
@@ -70,6 +72,12 @@
     private Dictionary<string, object> _conf = [];
 
     /// <summary>
+    /// Names this editor to the browser. The wrapper would generate one, but tearing an
+    /// editor down needs a handle that outlives its element, and only an id does.
+    /// </summary>
+    private readonly string _editorId = $"rte-{Guid.NewGuid():n}";
+
+    /// <summary>
     /// The single value both panes edit. Writing to it notifies the parent, so whichever
     /// pane is in front is the one that owns the content.
     /// </summary>
@@ -98,16 +106,47 @@
         {
             dark = await JS.InvokeAsync<bool>("xeonEditor.prefersDark");
         }
-        catch (JSException)
+        catch (Exception e) when (e is JSException or JSDisconnectedException)
         {
             // Fall back to the light skin rather than failing to show an editor at all.
+            // Letting this escape would abandon the render with the placeholder still up.
         }
+
+        // An editor from an earlier visit can still be registered against markup that a
+        // navigation has since removed. TinyMCE throws out of its own resize handling when
+        // it reaches one, and the editor being created here never appears.
+        await ReleaseEditorsAsync();
 
         _conf = await BuildConfigAsync(dark);
         _ready = true;
 
         StateHasChanged();
     }
+
+    /// <summary>
+    /// Drops this editor and any left behind by a navigation.
+    ///
+    /// The wrapper disposes synchronously and discards the task that would have done this,
+    /// and the call it makes cannot find its element once the element has gone, so nothing
+    /// here can rely on it having run.
+    /// </summary>
+    private async Task ReleaseEditorsAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("xeonEditor.releaseEditor", _editorId);
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit is gone, so the browser has already discarded the page.
+        }
+        catch (JSException)
+        {
+            // The editor is not worth failing a render or a teardown over.
+        }
+    }
+
+    public async ValueTask DisposeAsync() => await ReleaseEditorsAsync();
 
     private async Task<Dictionary<string, object>> BuildConfigAsync(bool dark)
     {
