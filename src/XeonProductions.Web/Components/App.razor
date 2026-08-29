@@ -44,7 +44,9 @@
         })();
     </script>
 
-    <ImportMap />
+    @* The import map is an inline script like any other and the CSP blocks it without the
+       nonce, which loses both the fingerprinted module paths and their integrity hashes. *@
+    <ImportMap nonce="@_nonce" />
     <HeadOutlet />
 </head>
 
