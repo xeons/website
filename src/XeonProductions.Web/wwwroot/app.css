@@ -533,12 +533,15 @@ th { font-weight: 600; background: var(--bg-subtle); }
 .site-content.one-container .pagination a,
 .site-content.one-container .pagination span { background: var(--bg-subtle); }
 
-/* The last entry gives up its padding and rule, so nothing separates it from the
-   pagination below it and the gap has to come from here. At the end of the content area
-   the container's own padding is already the space underneath, and the default margin
-   would sit on top of it. */
-.site-content.one-container .pagination { margin-top: var(--gutter); }
-.site-content.one-container .content-area > .pagination:last-child { margin-bottom: 0; }
+/* The last entry gives up its padding and rule, so nothing separates it from whatever
+   follows it and the gap has to come from here. At the end of the content area the
+   container's own padding is already the space underneath, and the default margin would
+   sit on top of it. */
+.site-content.one-container .pagination,
+.site-content.one-container .post-navigation { margin-top: var(--gutter); }
+
+.site-content.one-container .content-area > .pagination:last-child,
+.site-content.one-container .content-area > .post-navigation:last-child { margin-bottom: 0; }
 
 /* --------------------------------------------------------------- entry --- */
 
@@ -577,8 +580,15 @@ th { font-weight: 600; background: var(--bg-subtle); }
 .entry-image img { width: 100%; border-radius: var(--radius); display: block; }
 
 .entry-content > *:last-child { margin-bottom: 0; }
-.entry-content h2 { margin-top: 1.8em; }
-.entry-content h3 { margin-top: 1.6em; }
+/* Headings carry no top margin anywhere else on the site. Prose is the exception: a
+   heading needs to sit closer to the section it opens than to the one it closes, or it
+   reads as floating between the two.
+
+   Only where something precedes it, so a heading that opens the content is not pushed away
+   from the title above it. In rem rather than em, so the space is a step in the page rhythm
+   rather than a multiple of the heading's own size. */
+.entry-content * + h2 { margin-top: 2rem; }
+.entry-content * + h3 { margin-top: 1.75rem; }
 
 .entry-content ul, .entry-content ol { padding-left: 1.4em; }
 .entry-content li { margin-bottom: .4em; }
