@@ -55,6 +55,11 @@ services:
       Seed__AdminEmail: ${ADMIN_EMAIL:-}
       Seed__AdminPassword: ${ADMIN_PASSWORD:-}
       Seed__AdminDisplayName: ${ADMIN_NAME:-Brandon}
+    # Bound to loopback, not 0.0.0.0: this is how a reverse proxy already running on the
+    # host reaches the app, without the port being open to the network. Caddy does not use
+    # it, it reaches app:8080 over the compose network.
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
     volumes:
       - media-data:/app/media
       - downloads-data:/app/downloads
@@ -64,8 +69,12 @@ services:
       - internal
       - web
 
+  # Only starts with --profile caddy. On a host that already has nginx or Apache on
+  # 80 and 443, leave the profile off and put the server block in
+  # deploy/nginx/ in front of the app instead.
   caddy:
     image: caddy:2-alpine
+    profiles: ["caddy"]
     restart: unless-stopped
     depends_on:
       - app
