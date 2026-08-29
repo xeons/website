@@ -3,8 +3,17 @@
 **/.vs/
 **/.vscode/
 **/node_modules/
-**/media/
-**/downloads/
 .git/
 .env
 *.user
+
+# Runtime data the running site owns, kept out of the image.
+#
+# These are spelled out in full rather than written as **/media/ and **/downloads/.
+# A pattern matching any directory of that name also matches
+# wwwroot/lib/tinymce/plugins/media, which drops the editor's media plugin from the
+# build context. The editor then loads a 404 page in place of the plugin, which nosniff
+# refuses to run as script.
+src/XeonProductions.Web/media/
+src/XeonProductions.Web/downloads/
+src/XeonProductions.Web/keys/
