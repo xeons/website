@@ -24,6 +24,10 @@ src/XeonProductions.Web/downloads/
 NOTES.local.md
 *.local.md
 
+# Context written for picking the work back up. Describes the state of the deployments
+# rather than the code, so it goes stale the moment either one moves.
+HANDOFF.md
+
 # Any environment-specific settings written locally.
 src/XeonProductions.Web/appsettings.Production.json
 **/appsettings.*.local.json
