@@ -1,0 +1,59 @@
+@*
+    An RSA key pair from Web Crypto, exported as PEM.
+
+    The purpose is part of the key: a browser will not use an OAEP key to sign or a
+    PKCS#1 v1.5 key to encrypt, so it has to be chosen before the pair is generated.
+*@
+
+<div class="tool" data-tool="rsa-keys">
+    <div class="tool-options">
+        <label class="tool-inline">
+            Key size
+            <select data-tool-option="bits">
+                <option value="2048">2048 bits</option>
+                <option value="3072">3072 bits</option>
+                <option value="4096">4096 bits</option>
+            </select>
+        </label>
+
+        <label class="tool-inline">
+            Purpose
+            <select data-tool-option="usage">
+                <option value="encryption">Encryption (RSA-OAEP, SHA-256)</option>
+                <option value="signing">Signing (RSASSA-PKCS1-v1_5, SHA-256)</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn" data-tool-run="generate">Generate key pair</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+
+    <div class="tool-field">
+        <label for="rsa-public">Public key</label>
+        <textarea id="rsa-public" data-tool-public rows="7" spellcheck="false" readonly></textarea>
+        <div class="tool-actions">
+            <button type="button" class="btn btn-secondary" data-tool-copy="#rsa-public">
+                Copy public key
+            </button>
+        </div>
+    </div>
+
+    <div class="tool-field">
+        <label for="rsa-private">Private key</label>
+        <textarea id="rsa-private" data-tool-private rows="10" spellcheck="false" readonly></textarea>
+        <div class="tool-actions">
+            <button type="button" class="btn btn-secondary" data-tool-copy="#rsa-private">
+                Copy private key
+            </button>
+        </div>
+    </div>
+
+    <p class="tool-hint">
+        The public key is exported as SPKI and the private key as PKCS#8, both in PEM. A 4096
+        bit pair can take several seconds. The pair exists only on this page: leaving or
+        reloading loses it, so save the private key before you navigate away.
+    </p>
+</div>

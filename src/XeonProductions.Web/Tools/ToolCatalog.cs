@@ -24,6 +24,20 @@ public static class ToolCatalog
             + "Runs entirely in your browser.",
             ToolCategory.Hashing, typeof(HmacTool)),
 
+        new("encrypt", "AES Text Encryption",
+            "Encrypt text with a passphrase using AES-GCM, and decrypt it again.",
+            "Encrypt and decrypt text with a passphrase using AES-256-GCM, with the key "
+            + "derived by PBKDF2. Everything happens in your browser: neither the text nor "
+            + "the passphrase is sent anywhere.",
+            ToolCategory.Encryption, typeof(EncryptTool)),
+
+        new("rsa-keys", "RSA Key Pair Generator",
+            "Generate an RSA key pair and export both halves as PEM.",
+            "Generate a 2048, 3072 or 4096 bit RSA key pair for encryption or signing, "
+            + "exported as PEM. The pair is generated in your browser and the private key "
+            + "never leaves it.",
+            ToolCategory.Encryption, typeof(RsaKeysTool)),
+
         new("base64", "Base64 Encode and Decode",
             "Convert text to and from Base64, with a URL-safe variant.",
             "Encode text to Base64 or decode Base64 back to text, including the URL-safe "
@@ -136,6 +150,7 @@ public static class ToolCatalog
     {
         ToolCategory.Encoding => "Encoding",
         ToolCategory.Hashing => "Hashing",
+        ToolCategory.Encryption => "Encryption",
         ToolCategory.Generators => "Generators",
         ToolCategory.Text => "Text",
         ToolCategory.Formats => "Formats and data",

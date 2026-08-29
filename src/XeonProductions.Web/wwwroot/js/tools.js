@@ -493,8 +493,160 @@
                         ? bytesToBase64(bytes)
                         : bytesToHex(bytes, '', false);
                 });
+        },
+
+        encrypt: function (action, text, options) {
+            if (!subtle()) return Promise.reject(new Error(NO_SUBTLE));
+            if (!options.password) throw new Error('Enter a passphrase.');
+
+            return action === 'decrypt'
+                ? aesDecrypt(text, options.password)
+                : aesEncrypt(text, options.password);
         }
     };
+
+    /* ------------------------------------------------------------------- aes -- */
+
+    /* Both are random per message and neither is secret, so they travel in front of the
+       ciphertext. Reusing a nonce under one key is what breaks GCM, so it is never reused. */
+    var AES_SALT_BYTES = 16;
+    var AES_IV_BYTES = 12;
+
+    /* PBKDF2 rounds. The cost is what stands between a short passphrase and a search of
+       every candidate, so it is deliberately high enough to be felt. */
+    var AES_ROUNDS = 600000;
+
+    function aesKey(password, salt, usage) {
+        var api = subtle();
+
+        return api
+            .importKey('raw', toBytes(password), 'PBKDF2', false, ['deriveKey'])
+            .then(function (material) {
+                return api.deriveKey(
+                    { name: 'PBKDF2', salt: salt, iterations: AES_ROUNDS, hash: 'SHA-256' },
+                    material,
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    [usage]);
+            });
+    }
+
+    function aesEncrypt(text, password) {
+        var api = subtle();
+        var salt = randomBytes(AES_SALT_BYTES);
+        var iv = randomBytes(AES_IV_BYTES);
+
+        return aesKey(password, salt, 'encrypt')
+            .then(function (key) {
+                return api.encrypt({ name: 'AES-GCM', iv: iv }, key, toBytes(text));
+            })
+            .then(function (buffer) {
+                var body = new Uint8Array(buffer);
+                var out = new Uint8Array(salt.length + iv.length + body.length);
+
+                out.set(salt, 0);
+                out.set(iv, salt.length);
+                out.set(body, salt.length + iv.length);
+
+                return bytesToBase64(out);
+            });
+    }
+
+    function aesDecrypt(text, password) {
+        var api = subtle();
+        var bytes;
+
+        try {
+            bytes = base64ToBytes(normaliseBase64(text));
+        } catch (error) {
+            throw new Error('That is not a message this tool produced.');
+        }
+
+        if (bytes.length <= AES_SALT_BYTES + AES_IV_BYTES) {
+            throw new Error('That is not a message this tool produced.');
+        }
+
+        var salt = bytes.subarray(0, AES_SALT_BYTES);
+        var iv = bytes.subarray(AES_SALT_BYTES, AES_SALT_BYTES + AES_IV_BYTES);
+        var body = bytes.subarray(AES_SALT_BYTES + AES_IV_BYTES);
+
+        return aesKey(password, salt, 'decrypt')
+            .then(function (key) {
+                return api.decrypt({ name: 'AES-GCM', iv: iv }, key, body);
+            })
+            .then(function (buffer) {
+                return fromBytes(new Uint8Array(buffer));
+            }, function () {
+                /* The tag fails the same way for a wrong passphrase as for altered bytes,
+                   so this cannot say which it was. */
+                throw new Error('Wrong passphrase, or the message has been altered.');
+            });
+    }
+
+    /* ------------------------------------------------------------------- rsa -- */
+
+    /* The purpose is fixed at generation: a browser refuses to sign with an OAEP key or to
+       encrypt with a PKCS#1 v1.5 one. */
+    var RSA_USES = {
+        signing: { name: 'RSASSA-PKCS1-v1_5', uses: ['sign', 'verify'] },
+        encryption: { name: 'RSA-OAEP', uses: ['encrypt', 'decrypt'] }
+    };
+
+    /* DER bytes in Base64, wrapped at 64 characters, labelled with the export format. */
+    function pem(label, buffer) {
+        var body = bytesToBase64(new Uint8Array(buffer)).replace(/(.{64})/g, '$1\n');
+
+        return '-----BEGIN ' + label + '-----\n'
+            + body.replace(/\n$/, '') + '\n'
+            + '-----END ' + label + '-----';
+    }
+
+    function rsaGenerate(panel) {
+        var api = subtle();
+        var publicOut = panel.querySelector('[data-tool-public]');
+        var privateOut = panel.querySelector('[data-tool-private]');
+
+        if (!api) {
+            setStatus(panel, NO_SUBTLE);
+            return;
+        }
+
+        var options = readOptions(panel);
+        var bits = clamp(parseInt(options.bits, 10), 2048, 4096);
+        var purpose = RSA_USES[options.usage] || RSA_USES.encryption;
+        var token = nextToken(panel);
+
+        publicOut.value = '';
+        privateOut.value = '';
+        setStatus(panel, 'Generating ' + bits + ' bits. A large key takes a few seconds.');
+
+        api.generateKey(
+            {
+                name: purpose.name,
+                modulusLength: bits,
+                publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+                hash: 'SHA-256'
+            },
+            true,
+            purpose.uses)
+            .then(function (pair) {
+                return Promise.all([
+                    api.exportKey('spki', pair.publicKey),
+                    api.exportKey('pkcs8', pair.privateKey)
+                ]);
+            })
+            .then(function (exported) {
+                if (token !== panel.toolToken) return;
+
+                publicOut.value = pem('PUBLIC KEY', exported[0]);
+                privateOut.value = pem('PRIVATE KEY', exported[1]);
+                setStatus(panel, '');
+            }, function (error) {
+                if (token !== panel.toolToken) return;
+
+                setStatus(panel, (error && error.message) || 'That key pair could not be generated.');
+            });
+    }
 
     function runTransform(panel, action) {
         var transform = TRANSFORMS[panel.getAttribute('data-tool')];
@@ -1681,6 +1833,7 @@
         timestamp: { update: timestampUpdate, run: timestampNow, init: timestampNow },
         colour: { update: colourUpdate, init: colourInit },
         uuid: { run: uuidGenerate, init: uuidGenerate },
+        'rsa-keys': { run: rsaGenerate },
         password: { run: passwordGenerate, init: passwordGenerate },
         'case': { update: caseUpdate },
         'text-stats': { update: statsUpdate },
@@ -1785,7 +1938,10 @@
         }
 
         if (button.hasAttribute('data-tool-copy')) {
-            var output = panel.querySelector('[data-tool-output]');
+            /* A panel with more than one result names the field to copy. */
+            var target = button.getAttribute('data-tool-copy');
+            var output = panel.querySelector(target || '[data-tool-output]');
+
             copyText(output ? output.value : '', button);
             return;
         }

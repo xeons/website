@@ -5,6 +5,7 @@ public enum ToolCategory
 {
     Encoding,
     Hashing,
+    Encryption,
     Generators,
     Text,
     Formats

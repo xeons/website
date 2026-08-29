@@ -1,0 +1,47 @@
+@*
+    AES-256-GCM through Web Crypto, with the key derived from a passphrase by PBKDF2.
+
+    GCM authenticates as well as encrypts, so an altered message fails to decrypt rather than
+    returning wrong text. The salt and nonce are random for every message and are carried in
+    front of the ciphertext, which is why the same text encrypted twice never looks the same.
+*@
+
+<div class="tool" data-tool="encrypt">
+    <div class="tool-field">
+        <label for="encrypt-in">Message</label>
+        <textarea id="encrypt-in" data-tool-input rows="6" spellcheck="false"
+                  placeholder="Text to encrypt, or a message from this tool to decrypt"></textarea>
+    </div>
+
+    <div class="tool-field">
+        <label for="encrypt-key">Passphrase</label>
+        <input type="text" id="encrypt-key" data-tool-option="password" spellcheck="false"
+               autocomplete="off" placeholder="The passphrase both sides share" />
+        <span class="tool-hint">
+            The only thing protecting the message. There is no way to recover the text
+            without it.
+        </span>
+    </div>
+
+    <div class="tool-field">
+        <label for="encrypt-out">Result</label>
+        <textarea id="encrypt-out" data-tool-output rows="6" spellcheck="false" readonly></textarea>
+    </div>
+
+    <div class="tool-actions">
+        <button type="button" class="btn" data-tool-run="encrypt">Encrypt</button>
+        <button type="button" class="btn" data-tool-run="decrypt">Decrypt</button>
+        <button type="button" class="btn btn-secondary" data-tool-copy>Copy result</button>
+        <button type="button" class="btn btn-secondary" data-tool-swap>Result to message</button>
+        <button type="button" class="btn btn-secondary" data-tool-clear>Clear</button>
+    </div>
+
+    <p class="tool-status" data-tool-status role="status"></p>
+
+    <p class="tool-hint">
+        The output is Base64 over a 16 byte salt, a 12 byte nonce and the ciphertext with its
+        authentication tag. The key is derived with PBKDF2-HMAC-SHA-256 over 600,000 rounds,
+        which is what makes a short passphrase expensive to guess and why encrypting takes a
+        moment. Only this tool reads the format.
+    </p>
+</div>
