@@ -359,6 +359,49 @@ instance count.
 - The blocked, expired and missing responses are small self-contained pages that link the site
   stylesheet, so they follow the theme without a layout to render into.
 
+## Developer tools
+
+`/tools` holds twenty small utilities: hashing and HMAC, Base64, URL, hex, binary and HTML
+entity encoding, AES text encryption, an RSA key pair generator, a JWT decoder, a JSON
+formatter, base and timestamp converters, a colour converter, UUID and password generators,
+case conversion, text statistics, a diff and a regex tester.
+
+All of it runs in the browser. Pasting a token or a passphrase into a page that sent it
+somewhere would defeat the point, and a public page opening a circuit per visitor to do
+arithmetic would be worse than useless. The pages stay static SSR and the behaviour lives in
+`wwwroot/js/tools.js`, bound by delegation so it survives enhanced navigation.
+
+Each tool is an entry in `ToolCatalog` and a component under `Components/Tools`, routed by
+slug through `DynamicComponent`, so a tool has its own title, description and canonical URL
+rather than sharing one page. An unknown slug hands off to the router for a real 404.
+
+A panel carries `data-tool="<name>"` and the script keys its behaviour off that name. Nothing
+ties the two together, so a tool added to the catalog with no handler in the script would
+render as a dead panel. A test walks every component's markup and fails if the name it
+renders is one the script does not know.
+
+Conversions go through UTF-8 bytes rather than the string, so text outside Latin-1 survives a
+round trip. The SHA family comes from Web Crypto; MD5 and CRC32 are not in it and are computed
+in the script. The regex tester runs in a worker with a deadline, because a pattern that
+backtracks exponentially cannot be interrupted on the main thread.
+
+### Encryption
+
+Text encryption is AES-256-GCM, with the key derived from the passphrase by PBKDF2-HMAC-SHA-256
+over 600,000 rounds. A 16 byte salt and a 12 byte nonce are drawn for every message and travel
+in front of the ciphertext, so the same text never encrypts to the same output and a nonce is
+never reused under one key. GCM authenticates as well as encrypts, so an altered message fails
+rather than decrypting to something wrong. A wrong passphrase and altered bytes report the
+same thing, because the authentication tag cannot tell them apart.
+
+The key pair generator produces RSA at 2048, 3072 or 4096 bits as PEM, SPKI for the public
+half and PKCS#8 for the private one. The purpose is fixed when the pair is generated: a
+browser refuses to sign with an OAEP key or encrypt with a PKCS#1 v1.5 one.
+
+Both need Web Crypto, which browsers expose only over HTTPS or on localhost. On a plain HTTP
+host they say so rather than failing quietly, which is why they cannot be exercised on the
+Docker test box below.
+
 ## Testing on a machine with Docker
 
 `docker-compose.dev.yml` brings up the app and the database with no proxy in front, which is
@@ -379,35 +422,82 @@ ConnectionStrings__Default="Host=<host>;Port=5432;Database=xeon;Username=xeon;Pa
 
 ## Deploying
 
-Copy `.env.example` to `.env`, fill it in, then:
+A push to `main` deploys. `.github/workflows/deploy.yml` builds, tests and checks the tree is
+ASCII; on `main` it then publishes an image to `ghcr.io/xeons/website` tagged with the commit
+and asks the server to take it.
+
+The server never builds and never sees the source. It runs `deploy/deploy.sh`, which fetches
+the compose file for that commit, dumps the database, pulls the image, restarts and waits for
+`/health`, failing the deployment if the site does not answer.
+
+Every deployment is a tag, so a rollback is a line in `.env` and a restart:
 
 ```bash
-docker compose up -d --build
+APP_IMAGE=ghcr.io/xeons/website:sha-<commit>
+docker compose -p xeon-cms up -d
 ```
 
-That brings up three containers: Caddy on 80 and 443 handling TLS automatically, the app on
-an internal network, and Postgres on a network the proxy cannot reach. Uploads and database
-files live on named volumes, so a rebuild does not touch them.
+Rolling back after a migration has run is not automatic, and is not safe to do without
+looking: the schema has already moved, and the previous image does not know about it.
 
-Point the DNS at the server first, or Caddy cannot complete the certificate challenge.
+### Setting a server up
 
-To run the importer against the deployed database:
+The application listens on `127.0.0.1:8080` and something in front of it terminates TLS.
+Either works:
+
+- **An nginx already on the host.** See `deploy/nginx/README.md` for the server block, the
+  websocket map it needs and the certbot invocation. This is what production runs.
+- **Nothing else on the host.** `docker compose --profile caddy up -d --build` starts Caddy
+  on 80 and 443 and it obtains a certificate itself. Point the DNS at the server first, or
+  the challenge cannot complete.
+
+Copy `.env.example` to `.env` and fill it in. Uploads, downloads and the data protection keys
+live on named volumes, so a rebuild touches none of them.
+
+For the pipeline to reach the server, install the deployment script and confine the key to it:
 
 ```bash
-docker compose run --rm \
+scp deploy/deploy.sh <user>@<host>:~/deploy.sh
+ssh <user>@<host> 'chmod 0755 ~/deploy.sh && mkdir -p ~/backups'
+```
+
+then in `~/.ssh/authorized_keys`, in front of the key itself:
+
+```
+restrict,command="/home/<user>/deploy.sh" ssh-ed25519 AAAA... github-actions
+```
+
+`restrict` refuses a terminal, port forwarding and agent forwarding; `command` replaces
+whatever the client asks for. The whole of what that key can then request is a commit, which
+the script checks is forty hexadecimal characters before doing anything. It builds the image
+reference from constants, so a key that has been taken can still only deploy a commit of this
+repository. The script is installed by hand and never written by a deployment: one that could
+rewrite it could put anything in it.
+
+`SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`, `SSH_USER` and `SSH_HOST` are repository secrets. The
+`.env` file stays on the server and is never in the repository or the workflow.
+
+To run the importer against the deployed database. It publishes to its own directory, so that
+its `appsettings.json` does not overwrite the application's:
+
+```bash
+docker compose -p xeon-cms run --rm \
   -e Media__StorageRoot=/app/media \
-  app dotnet XeonProductions.WpImporter.dll --source https://xeonproductions.com
+  app dotnet importer/XeonProductions.WpImporter.dll --source https://example.com
 ```
 
 ### Backups
 
-Three things need backing up: the database, the media volume and the downloads volume.
+The pipeline dumps the database before every deployment and keeps the last fourteen in
+`~/backups`. That covers the case a migration goes wrong, and nothing else.
+
+The media and downloads volumes are not covered and want their own schedule:
 
 ```bash
-docker compose exec -T db pg_dump -U xeon xeon | gzip > xeon-$(date +%F).sql.gz
-docker run --rm -v newwebsite_media-data:/media -v "$PWD":/backup alpine \
+docker compose -p xeon-cms exec -T db pg_dump -U xeon xeon | gzip > xeon-$(date +%F).sql.gz
+docker run --rm -v xeon-cms_media-data:/media -v "$PWD":/backup alpine \
   tar czf /backup/media-$(date +%F).tar.gz -C /media .
-docker run --rm -v newwebsite_downloads-data:/downloads -v "$PWD":/backup alpine \
+docker run --rm -v xeon-cms_downloads-data:/downloads -v "$PWD":/backup alpine \
   tar czf /backup/downloads-$(date +%F).tar.gz -C /downloads .
 ```
 
@@ -440,6 +530,11 @@ docker run --rm -v newwebsite_downloads-data:/downloads -v "$PWD":/backup alpine
   redirects to `/feed.xml` for readers subscribed to the WordPress URL.
 - The theme reads its palette from CSS custom properties emitted per request from the admin
   settings. Only validated hex colours make it into that block.
+- Enhanced navigation is off across the admin, so every screen there is a full load. The
+  editor cannot be built twice in one document: TinyMCE reveals its container from the skin
+  stylesheet, and its loader will not re-add a stylesheet that something else removed from
+  the document, which a navigation reconciling the head does. A new document each time is
+  cheaper than working around it.
 
 ## Licence
 
