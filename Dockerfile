@@ -11,8 +11,8 @@ COPY src/XeonProductions.Infrastructure/*.csproj src/XeonProductions.Infrastruct
 COPY src/XeonProductions.Web/*.csproj src/XeonProductions.Web/
 COPY tools/XeonProductions.WpImporter/*.csproj tools/XeonProductions.WpImporter/
 
-RUN dotnet restore src/XeonProductions.Web/XeonProductions.Web.csproj \
-    && dotnet restore tools/XeonProductions.WpImporter/XeonProductions.WpImporter.csproj
+RUN dotnet restore src/XeonProductions.Web/XeonProductions.Web.csproj -r linux-x64 \
+    && dotnet restore tools/XeonProductions.WpImporter/XeonProductions.WpImporter.csproj -r linux-x64
 
 COPY . .
 
@@ -21,9 +21,15 @@ COPY . .
 # Doing so silently drops the framework's own static web assets, blazor.web.js among them,
 # which breaks every interactive component with no build error to show for it. The package
 # cache from the layer above is still reused, so re-running restore here costs very little.
+#
+# -r linux-x64 names the only platform this image runs on. Without it the publish carries a
+# runtimes/ directory for every identifier NuGet knows about, nineteen of them, which is
+# most of the size of the result. --self-contained false keeps the framework itself out,
+# since the runtime image already has it.
 RUN dotnet publish src/XeonProductions.Web/XeonProductions.Web.csproj \
     -c Release \
-    -o /app/publish \
+    -r linux-x64 --self-contained false \
+    -o /publish \
     /p:UseAppHost=false
 
 # The importer ships alongside the app so a migration can be run in the deployed environment,
@@ -31,8 +37,17 @@ RUN dotnet publish src/XeonProductions.Web/XeonProductions.Web.csproj \
 # both to one directory would have the two appsettings.json files overwrite each other.
 RUN dotnet publish tools/XeonProductions.WpImporter/XeonProductions.WpImporter.csproj \
     -c Release \
-    -o /app/publish/importer \
+    -r linux-x64 --self-contained false \
+    -o /publish-importer \
     /p:UseAppHost=false
+
+# Moved aside so it can be copied into a layer of its own below. A directory cannot be both
+# copied separately and left in place, because the copy that follows would carry it again
+# and put it back in the same layer.
+#
+# There is no runtimes/ to separate: naming a single identifier above puts this platform's
+# native libraries straight into the output root instead.
+RUN mkdir -p /layers && mv /publish/wwwroot /layers/wwwroot
 
 # ---------- runtime ----------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
@@ -43,7 +58,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl libfontconfig1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /app/publish .
+# Three layers rather than one, ordered by how often each changes. A layer is stored and
+# transferred whole, so a deploy that only touches code re-sends only the last of these.
+COPY --from=build /publish-importer ./importer
+COPY --from=build /layers/wwwroot ./wwwroot
+COPY --from=build /publish .
 
 # Uploads, downloads and the data protection key ring live on volumes, so a rebuild takes
 # neither the files nor everyone's session with it. Downloads get a volume of their own,
