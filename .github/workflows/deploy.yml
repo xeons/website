@@ -46,7 +46,13 @@ jobs:
   publish:
     name: Publish the image
     needs: check
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Stated on all three of these rather than left to the fact that a job whose dependency
+    # was skipped is skipped in turn. What reaches the server should be readable here.
+    #
+    # A merged pull request arrives as a push to main and so does deploy. The ref is checked
+    # as well as the event, or running this by hand from a branch would put that branch on
+    # the server.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -86,6 +92,7 @@ jobs:
   deploy:
     name: Deploy
     needs: publish
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     # Attach required reviewers to this environment to hold a deployment for approval.
     environment: production
@@ -114,17 +121,22 @@ jobs:
                 | gzip > ~/backups/xeon-$(date +%Y%m%d-%H%M%S).sql.gz \
              && ls -t ~/backups/*.sql.gz | tail -n +15 | xargs -r rm'
 
+      # Pulled before .env is touched. Naming an image the server does not have and only
+      # then finding out it cannot be fetched would leave the file pointing at nothing, and
+      # the next restart, deliberate or not, would fail to start the site.
+      #
       # Migrations run when the app starts, so a bad one takes the site down here rather
       # than in a step of its own. The backup above is what makes that recoverable.
       - name: Roll out
         run: |
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "cd ~/xeon-cms \
-             && sed -i '/^APP_IMAGE=/d' .env \
-             && echo 'APP_IMAGE=${{ env.IMAGE }}:sha-${{ github.sha }}' >> .env \
-             && docker compose -p xeon-cms pull app \
-             && docker compose -p xeon-cms up -d \
-             && docker image prune -f"
+            "set -e
+             cd ~/xeon-cms
+             docker pull '${{ env.IMAGE }}:sha-${{ github.sha }}'
+             sed -i '/^APP_IMAGE=/d' .env
+             echo 'APP_IMAGE=${{ env.IMAGE }}:sha-${{ github.sha }}' >> .env
+             docker compose -p xeon-cms up -d
+             docker image prune -f"
 
       - name: Wait for it to answer
         run: |
@@ -140,6 +152,7 @@ jobs:
   prune:
     name: Remove old image versions
     needs: deploy
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       packages: write
