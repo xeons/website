@@ -96,9 +96,8 @@ jobs:
     runs-on: ubuntu-latest
     # Attach required reviewers to this environment to hold a deployment for approval.
     environment: production
+    # Nothing is checked out: the server fetches what it needs for the commit itself.
     steps:
-      - uses: actions/checkout@v4
-
       - name: Authorise against the server
         run: |
           mkdir -p ~/.ssh
@@ -106,48 +105,17 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
 
-      # The compose file describes the deployment, so the server takes the copy that belongs
-      # to the commit being deployed rather than whatever it happens to be holding.
-      - name: Send the compose file
-        run: |
-          scp -i ~/.ssh/id_ed25519 docker-compose.yml \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/xeon-cms/docker-compose.yml"
-
-      - name: Back up the database
-        run: |
-          ssh -i ~/.ssh/id_ed25519 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            'cd ~/xeon-cms \
-             && docker compose -p xeon-cms exec -T db pg_dump -U xeon -d xeon \
-                | gzip > ~/backups/xeon-$(date +%Y%m%d-%H%M%S).sql.gz \
-             && ls -t ~/backups/*.sql.gz | tail -n +15 | xargs -r rm'
-
-      # Pulled before .env is touched. Naming an image the server does not have and only
-      # then finding out it cannot be fetched would leave the file pointing at nothing, and
-      # the next restart, deliberate or not, would fail to start the site.
+      # One call, and the server decides what it means. The key is restricted to
+      # deploy.sh there, so the commit below is the whole of what this can ask for: the
+      # script fetches the compose file for it, backs the database up, pulls, restarts and
+      # waits for the health endpoint, and fails the step if any of that does not happen.
       #
-      # Migrations run when the app starts, so a bad one takes the site down here rather
-      # than in a step of its own. The backup above is what makes that recoverable.
+      # Migrations run as the application starts, so a bad one is felt during the rollout
+      # rather than in a step of its own. The backup the script takes first is what makes
+      # that recoverable.
       - name: Roll out
         run: |
-          ssh -i ~/.ssh/id_ed25519 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "set -e
-             cd ~/xeon-cms
-             docker pull '${{ env.IMAGE }}:sha-${{ github.sha }}'
-             sed -i '/^APP_IMAGE=/d' .env
-             echo 'APP_IMAGE=${{ env.IMAGE }}:sha-${{ github.sha }}' >> .env
-             docker compose -p xeon-cms up -d
-             docker image prune -f"
-
-      - name: Wait for it to answer
-        run: |
-          ssh -i ~/.ssh/id_ed25519 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            'for i in $(seq 1 30); do
-               if curl -fsS -o /dev/null http://127.0.0.1:8080/health; then
-                 echo "healthy"; exit 0
-               fi
-               sleep 2
-             done
-             echo "the app did not become healthy"; exit 1'
+          ssh -i ~/.ssh/id_ed25519 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"             '${{ github.sha }}'
 
   prune:
     name: Remove old image versions
