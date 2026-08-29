@@ -22,6 +22,10 @@ services:
       - internal
 
   app:
+    # Built here by default. A deployment sets APP_IMAGE to a tag from the registry in .env
+    # and pulls that instead, so the server never builds and every deploy is a tag that can
+    # be rolled back to.
+    image: ${APP_IMAGE:-xeon-cms-app:local}
     build:
       context: .
       dockerfile: Dockerfile

@@ -1,0 +1,153 @@
+# Checks every push and pull request. A push to main that passes is built into an image,
+# published to the container registry and rolled out to the server.
+#
+# The server never builds and never sees the source: it pulls a tag. Every deploy is
+# therefore a tag that can be rolled back to by setting APP_IMAGE in its .env and running
+# docker compose up -d.
+
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One deployment at a time, and never cancel one part way through.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  check:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # --no-incremental because an incremental build reports no warnings on the second run,
+      # which would let a warning through unnoticed.
+      - name: Build
+        run: dotnet build --no-incremental --configuration Release
+
+      - name: Test
+        run: dotnet test --configuration Release
+
+      - name: Check the tree is ASCII
+        run: python tools/check-ascii.py
+
+  publish:
+    name: Publish the image
+    needs: check
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Two tags: the commit, which is what a deployment pins and what a rollback names,
+      # and latest, for reading by hand.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy
+    needs: publish
+    runs-on: ubuntu-latest
+    # Attach required reviewers to this environment to hold a deployment for approval.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authorise against the server
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      # The compose file describes the deployment, so the server takes the copy that belongs
+      # to the commit being deployed rather than whatever it happens to be holding.
+      - name: Send the compose file
+        run: |
+          scp -i ~/.ssh/id_ed25519 docker-compose.yml \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/xeon-cms/docker-compose.yml"
+
+      - name: Back up the database
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            'cd ~/xeon-cms \
+             && docker compose -p xeon-cms exec -T db pg_dump -U xeon -d xeon \
+                | gzip > ~/backups/xeon-$(date +%Y%m%d-%H%M%S).sql.gz \
+             && ls -t ~/backups/*.sql.gz | tail -n +15 | xargs -r rm'
+
+      # Migrations run when the app starts, so a bad one takes the site down here rather
+      # than in a step of its own. The backup above is what makes that recoverable.
+      - name: Roll out
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "cd ~/xeon-cms \
+             && sed -i '/^APP_IMAGE=/d' .env \
+             && echo 'APP_IMAGE=${{ env.IMAGE }}:sha-${{ github.sha }}' >> .env \
+             && docker compose -p xeon-cms pull app \
+             && docker compose -p xeon-cms up -d \
+             && docker image prune -f"
+
+      - name: Wait for it to answer
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            'for i in $(seq 1 30); do
+               if curl -fsS -o /dev/null http://127.0.0.1:8080/health; then
+                 echo "healthy"; exit 0
+               fi
+               sleep 2
+             done
+             echo "the app did not become healthy"; exit 1'
+
+  prune:
+    name: Remove old image versions
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      # Nothing expires on its own, so every deploy would otherwise leave a version behind
+      # for good. The newest are kept so a rollback still has something to go back to.
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: container
+          min-versions-to-keep: 10
