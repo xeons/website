@@ -231,6 +231,19 @@ public partial class WordPressImporter(
 
     // --- Pages ---
 
+    /// <summary>
+    /// Whether an entry already in the database should be written over.
+    ///
+    /// Content is kept by default, so a second run cannot undo edits made since the first.
+    /// A page the seeder created is the exception: it stands in for an entry the site is
+    /// expected to have and carries nothing but placeholder text, so an import fills it in.
+    /// The source has to actually hold something for that, or a WordPress page left empty
+    /// would blank the placeholder instead of replacing it.
+    /// </summary>
+    public static bool ShouldReplaceExisting(string? existingHtml, string? incomingHtml, bool overwrite) =>
+        overwrite
+        || (SeedContent.IsPlaceholder(existingHtml) && !string.IsNullOrWhiteSpace(incomingHtml));
+
     private async Task ImportPagesAsync(
         string baseUrl, ImportOptions options, ImportReport report,
         string? authorId, CancellationToken ct)
@@ -247,10 +260,12 @@ public partial class WordPressImporter(
             var existing = await db.Pages
                 .FirstOrDefaultAsync(p => p.Slug == slug && p.ParentId == parentId, ct);
 
-            if (existing is not null && !options.Overwrite)
+            if (existing is not null
+                && !ShouldReplaceExisting(existing.ContentHtml, item.Content?.Rendered, options.Overwrite))
             {
                 _pageMap[item.Id] = existing.Id;
                 report.Skipped++;
+                logger.LogInformation("Page {Slug} is already present, leaving it as it is.", slug);
                 continue;
             }
 
@@ -313,9 +328,11 @@ public partial class WordPressImporter(
                 .Include(p => p.Tags)
                 .FirstOrDefaultAsync(p => p.Slug == item.Slug, ct);
 
-            if (existing is not null && !options.Overwrite)
+            if (existing is not null
+                && !ShouldReplaceExisting(existing.ContentHtml, item.Content?.Rendered, options.Overwrite))
             {
                 report.Skipped++;
+                logger.LogInformation("Post {Slug} is already present, leaving it as it is.", item.Slug);
                 continue;
             }
 

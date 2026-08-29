@@ -245,7 +245,7 @@ public static class DbSeeder
                 Status = ContentStatus.Published,
                 PublishedAt = DateTimeOffset.UtcNow,
                 AuthorId = owner?.Id,
-                ContentHtml = "<p>Replace this from the admin, or run the WordPress importer.</p>"
+                ContentHtml = SeedContent.AboutHtml
             },
             new Page
             {
@@ -256,7 +256,7 @@ public static class DbSeeder
                 AuthorId = owner?.Id,
                 Template = PageTemplate.Narrow,
                 // The contact page renders its form from the route, not from content.
-                ContentHtml = "<p>Questions, corrections or work enquiries are all welcome.</p>"
+                ContentHtml = SeedContent.ContactHtml
             });
 
         await db.SaveChangesAsync(ct);
