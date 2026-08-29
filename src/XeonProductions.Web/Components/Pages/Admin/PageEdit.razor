@@ -271,7 +271,10 @@
 
             if (Id is null)
             {
-                Nav.NavigateTo($"/admin/pages/{saved.Id}");
+                // Loaded rather than routed, for the reason the admin turns off enhanced
+                // navigation: this lands on another editor, which cannot be built a second
+                // time in one document.
+                Nav.NavigateTo($"/admin/pages/{saved.Id}", forceLoad: true);
                 return;
             }
 

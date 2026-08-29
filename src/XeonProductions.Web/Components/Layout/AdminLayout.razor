@@ -9,7 +9,14 @@
     <meta name="robots" content="noindex,nofollow" />
 </HeadContent>
 
-<div class="admin">
+@*
+    Enhanced navigation is off across the admin. It keeps the document between screens, and
+    the editor cannot be built twice in one document: TinyMCE chains the event that builds
+    its toolbar and takes its first measurements off loading the skin stylesheet, and that
+    never settles the second time round, so the editor arrives with no toolbar and the wrong
+    size. A full load per screen costs a circuit here and is not worth working around.
+*@
+<div class="admin" data-enhance-nav="false">
     <aside class="admin-sidebar">
         <div class="admin-brand">
             <strong>@_settings.SiteTitle</strong>

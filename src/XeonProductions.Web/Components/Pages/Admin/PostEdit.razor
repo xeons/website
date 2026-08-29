@@ -281,7 +281,10 @@
             if (Id is null)
             {
                 // Move to the canonical edit URL so a refresh does not create a second post.
-                Nav.NavigateTo($"/admin/posts/{saved.Id}");
+                // Loaded rather than routed, for the reason the admin turns off enhanced
+                // navigation: this lands on another editor, which cannot be built a second
+                // time in one document.
+                Nav.NavigateTo($"/admin/posts/{saved.Id}", forceLoad: true);
                 return;
             }
 

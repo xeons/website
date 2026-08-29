@@ -555,6 +555,15 @@
 .rte .tox.tox-tinymce-aux { z-index: 15; }
 .rte .tox-tinymce { z-index: 1; }
 
+/*
+ * TinyMCE builds its container with an inline visibility:hidden and clears it when the
+ * skin stylesheet finishes loading. Coming back to an editor a second time in the same
+ * document leaves that load unresolved, so the container is built and populated but never
+ * revealed and the pane looks empty. Overriding it needs !important because the value
+ * TinyMCE sets is inline.
+ */
+.rte .tox-tinymce { visibility: visible !important; }
+
 /* The content card holds the editor now, so drop the old textarea sizing. */
 .editor-content .field { margin-bottom: 0; }
 .editor-content .field-hint { margin-top: 10px; display: block; }
