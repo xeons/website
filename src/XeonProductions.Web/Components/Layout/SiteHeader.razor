@@ -136,12 +136,22 @@
 
     /// <summary>
     /// Roughly how wide the logo is drawn, so the browser can pick a candidate before
-    /// layout. Derived from the configured height and the image's own proportions.
+    /// layout. A candidate is chosen against this rather than against the eventual layout,
+    /// so a figure smaller than the truth is served upscaled and soft.
+    ///
+    /// The banner layout lifts the height cap and gives the logo the container's width, so
+    /// there the height says nothing about how wide it lands. Every other layout bounds it
+    /// by height, and the width follows from the image's own proportions.
     /// </summary>
     private string LogoSizes
     {
         get
         {
+            if (Settings.HeaderLayout == HeaderLayout.Banner)
+            {
+                return $"(max-width: {Settings.ContentWidth}px) 100vw, {Settings.ContentWidth}px";
+            }
+
             var width = 400;
 
             if (_light is { Width: > 0, Height: > 0 })
