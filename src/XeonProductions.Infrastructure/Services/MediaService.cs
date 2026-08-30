@@ -246,8 +246,7 @@ public class MediaService(
         using var thumb = Resize(source, _opts.ThumbnailWidth, targetHeight);
         if (thumb is null) return null;
 
-        var dir = Path.GetDirectoryName(relativePath)!.Replace('\\', '/');
-        var thumbRelative = $"{dir}/{Path.GetFileNameWithoutExtension(relativePath)}-thumb.webp";
+        var thumbRelative = $"{WithoutExtension(relativePath)}-thumb.webp";
         var thumbAbsolute = Path.Combine(_opts.StorageRoot, thumbRelative);
 
         Directory.CreateDirectory(Path.GetDirectoryName(thumbAbsolute)!);
@@ -315,11 +314,25 @@ public class MediaService(
     /// The name a variant is stored under. Derived rather than recorded, so the path and the
     /// width can never disagree about which file is which.
     /// </summary>
-    public static string VariantPath(string relativePath, int width)
-    {
-        var dir = Path.GetDirectoryName(relativePath)!.Replace('\\', '/');
+    public static string VariantPath(string relativePath, int width) =>
+        $"{WithoutExtension(relativePath)}-{width}w.webp";
 
-        return $"{dir}/{Path.GetFileNameWithoutExtension(relativePath)}-{width}w.webp";
+    /// <summary>
+    /// A stored path with its extension removed and its separators as a URL writes them.
+    ///
+    /// Path.GetDirectoryName is deliberately not used. It treats a backslash as a separator
+    /// only on Windows, so the same stored path is split one way on a workstation and
+    /// another on the server, and a name built from it would point at a file that is not
+    /// there.
+    /// </summary>
+    private static string WithoutExtension(string relativePath)
+    {
+        var normalised = relativePath.Replace('\\', '/');
+        var dot = normalised.LastIndexOf('.');
+        var slash = normalised.LastIndexOf('/');
+
+        // A dot before the last separator belongs to a directory, not to the name.
+        return dot > slash ? normalised[..dot] : normalised;
     }
 
     /// <summary>
