@@ -31,7 +31,12 @@ public class SiteHeaderTests : BunitContext
         var media = new Mock<IMediaService>();
         media.Setup(m => m.ResolveByUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new MediaVariants(
-                "/media/logo.png", LogoWidth, LogoHeight, "/media/logo-thumb.webp", ThumbnailWidth));
+                "/media/logo.png", LogoWidth, LogoHeight, "/media/logo-thumb.webp", ThumbnailWidth,
+                [
+                    new MediaVariant("/media/logo-thumb.webp", ThumbnailWidth),
+                    new MediaVariant("/media/logo-800w.webp", 800),
+                    new MediaVariant($"/media/logo-{LogoWidth}w.webp", LogoWidth)
+                ]));
 
         Services.AddSingleton(navigation.Object);
         Services.AddSingleton(media.Object);
@@ -46,11 +51,30 @@ public class SiteHeaderTests : BunitContext
         ContentWidth = 1200
     };
 
-    private string SizesFor(HeaderLayout layout)
-    {
-        var header = Render<SiteHeader>(p => p.Add(h => h.Settings, Settings(layout)));
+    private IRenderedComponent<SiteHeader> RenderWith(HeaderLayout layout) =>
+        Render<SiteHeader>(p => p.Add(h => h.Settings, Settings(layout)));
 
-        return header.Find("img.logo-light").GetAttribute("sizes")!;
+    /// <summary>The attribute lives on the source now, which is what offers the WebP copies.</summary>
+    private string SizesFor(HeaderLayout layout) =>
+        RenderWith(layout).Find("source[type=\"image/webp\"]").GetAttribute("sizes")!;
+
+    /// <summary>
+    /// A srcset carrying both formats would give a browser without WebP no way to decline it.
+    /// Every WebP belongs on the source; the img beneath keeps the original alone.
+    /// </summary>
+    [Fact]
+    public void TheWebpCopiesAreOfferedOnlyThroughTheSource()
+    {
+        var header = RenderWith(HeaderLayout.Banner);
+
+        var source = header.Find("source[type=\"image/webp\"]").GetAttribute("srcset")!;
+        var image = header.Find("img.logo-light");
+
+        Assert.Contains(".webp 480w", source);
+        Assert.Contains($".webp {LogoWidth}w", source);
+
+        Assert.Equal("/media/logo.png", image.GetAttribute("src"));
+        Assert.Null(image.GetAttribute("srcset"));
     }
 
     /// <summary>

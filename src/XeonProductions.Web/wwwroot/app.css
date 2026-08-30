@@ -245,6 +245,10 @@ th { font-weight: 600; background: var(--bg-subtle); }
    push the header wider than the page. */
 .site-logo { display: block; line-height: 0; }
 
+/* The picture wrapper is inline by default, which would leave the img sitting on a text
+   baseline. It carries no styling of its own; the img inside is what is sized and hidden. */
+.site-logo picture { display: block; }
+
 .site-logo img {
     display: block;
     height: auto;

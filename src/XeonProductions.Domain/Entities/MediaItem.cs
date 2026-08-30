@@ -13,6 +13,13 @@ public class MediaItem
     /// <summary>Relative path of the generated thumbnail, when the item is an image.</summary>
     public string? ThumbnailPath { get; set; }
 
+    /// <summary>
+    /// Widths of the WebP copies written beside the original, ascending. The paths are not
+    /// stored: a variant is always the original's name with the width appended, so the two
+    /// cannot drift apart. See <c>MediaService.VariantPath</c>.
+    /// </summary>
+    public int[] VariantWidths { get; set; } = [];
+
     public string ContentType { get; set; } = string.Empty;
     public long SizeBytes { get; set; }
 

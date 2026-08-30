@@ -54,7 +54,8 @@ public class MediaService(
                     item.Width,
                     item.Height,
                     item.ThumbnailPath is null ? null : PublicUrl(item.ThumbnailPath),
-                    _opts.ThumbnailWidth);
+                    _opts.ThumbnailWidth,
+                    WebpLadder(item));
             }
         }
         catch (Exception ex)
@@ -108,6 +109,7 @@ public class MediaService(
 
         int? width = null, height = null;
         string? thumbnailPath = null;
+        int[] variantWidths = [];
 
         // SVG is an image that Skia will not decode, so it is stored verbatim.
         var isRaster = contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
@@ -120,6 +122,7 @@ public class MediaService(
             width = processed.Width;
             height = processed.Height;
             thumbnailPath = processed.ThumbnailPath;
+            variantWidths = processed.VariantWidths;
 
             if (!processed.Handled)
             {
@@ -136,6 +139,7 @@ public class MediaService(
             FileName = fileName,
             RelativePath = relativePath.Replace('\\', '/'),
             ThumbnailPath = thumbnailPath,
+            VariantWidths = variantWidths,
             ContentType = contentType,
             SizeBytes = new FileInfo(absolutePath).Length,
             Width = width,
@@ -152,7 +156,7 @@ public class MediaService(
         return new MediaUploadResult(true, item, null);
     }
 
-    private record ImageResult(bool Handled, int? Width, int? Height, string? ThumbnailPath);
+    private record ImageResult(bool Handled, int? Width, int? Height, string? ThumbnailPath, int[] VariantWidths);
 
     /// <summary>
     /// Reads the dimensions, downscales when the image is wider than the configured maximum,
@@ -171,7 +175,7 @@ public class MediaService(
             {
                 // Not something Skia understands. Store it as uploaded rather than reject it.
                 logger.LogDebug("Could not decode {Path} as an image; storing it unchanged.", relativePath);
-                return new ImageResult(false, null, null, null);
+                return new ImageResult(false, null, null, null, []);
             }
 
             var width = decoded.Width;
@@ -212,8 +216,9 @@ public class MediaService(
                 }
 
                 var thumbnailPath = WriteThumbnail(working, relativePath);
+                var variantWidths = WriteVariants(working, relativePath);
 
-                return new ImageResult(needsDownscale, width, height, thumbnailPath);
+                return new ImageResult(needsDownscale, width, height, thumbnailPath, variantWidths);
             }
             finally
             {
@@ -223,7 +228,7 @@ public class MediaService(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Image processing failed for {Path}; storing the original.", relativePath);
-            return new ImageResult(false, null, null, null);
+            return new ImageResult(false, null, null, null, []);
         }
         finally
         {
@@ -249,6 +254,131 @@ public class MediaService(
         Write(thumb, SKEncodedImageFormat.Webp, thumbAbsolute, _opts.ThumbnailQuality);
 
         return thumbRelative;
+    }
+
+    /// <summary>
+    /// Writes the WebP copies for images that have none. An image stored before the variants
+    /// existed keeps working without them, it is simply offered at one size, so this is a
+    /// repair rather than a migration and is safe to run more than once.
+    /// </summary>
+    public async Task<int> RebuildVariantsAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        // The library is small and the filter is awkward to express in SQL over an array
+        // column, so the choice is made here.
+        var images = await db.Media
+            .Where(m => m.ContentType.StartsWith("image/"))
+            .ToListAsync(ct);
+
+        var rebuilt = 0;
+
+        foreach (var item in images.Where(m => m.VariantWidths.Length == 0))
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var absolute = Path.Combine(_opts.StorageRoot, item.RelativePath);
+            if (!File.Exists(absolute)) continue;
+
+            SKBitmap? decoded = null;
+
+            try
+            {
+                decoded = SKBitmap.Decode(absolute);
+
+                // SVG and anything else Skia will not read stays as it is.
+                if (decoded is null) continue;
+
+                item.VariantWidths = WriteVariants(decoded, item.RelativePath);
+                item.Width ??= decoded.Width;
+                item.Height ??= decoded.Height;
+
+                cache.Remove($"media-variants:{item.RelativePath}");
+                rebuilt++;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not rebuild variants for {Path}.", item.RelativePath);
+            }
+            finally
+            {
+                decoded?.Dispose();
+            }
+        }
+
+        if (rebuilt > 0) await db.SaveChangesAsync(ct);
+
+        return rebuilt;
+    }
+
+    /// <summary>
+    /// The name a variant is stored under. Derived rather than recorded, so the path and the
+    /// width can never disagree about which file is which.
+    /// </summary>
+    public static string VariantPath(string relativePath, int width)
+    {
+        var dir = Path.GetDirectoryName(relativePath)!.Replace('\\', '/');
+
+        return $"{dir}/{Path.GetFileNameWithoutExtension(relativePath)}-{width}w.webp";
+    }
+
+    /// <summary>
+    /// Writes a WebP at each configured width narrower than the image, and one at the
+    /// image's own width. The full width copy is the one that matters: a photographic PNG
+    /// costs several times what the same pixels cost as WebP, and it is the copy a desktop
+    /// asks for. Returns the widths written, ascending.
+    /// </summary>
+    private int[] WriteVariants(SKBitmap source, string relativePath)
+    {
+        var widths = _opts.VariantWidths
+            .Where(w => w > 0 && w < source.Width)
+            .Append(source.Width)
+            .Distinct()
+            .Order()
+            .ToArray();
+
+        var written = new List<int>(widths.Length);
+
+        foreach (var width in widths)
+        {
+            var targetHeight = Math.Max(1, (int)Math.Round(source.Height * (width / (double)source.Width)));
+
+            using var scaled = width == source.Width ? null : Resize(source, width, targetHeight);
+            var bitmap = scaled ?? source;
+
+            if (width != source.Width && scaled is null) continue;
+
+            var absolute = Path.Combine(_opts.StorageRoot, VariantPath(relativePath, width));
+
+            Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
+            Write(bitmap, SKEncodedImageFormat.Webp, absolute, _opts.VariantQuality);
+
+            written.Add(width);
+        }
+
+        return [.. written];
+    }
+
+    /// <summary>
+    /// The widths a browser may choose between, smallest first. The thumbnail joins them: it
+    /// is already a WebP and is narrower than any variant, so leaving it out would mean
+    /// writing a second copy at the same size.
+    /// </summary>
+    private IReadOnlyList<MediaVariant> WebpLadder(MediaItem item)
+    {
+        var ladder = new List<MediaVariant>();
+
+        if (item.ThumbnailPath is not null)
+        {
+            ladder.Add(new MediaVariant(PublicUrl(item.ThumbnailPath), _opts.ThumbnailWidth));
+        }
+
+        foreach (var width in item.VariantWidths.Where(w => w > _opts.ThumbnailWidth).Order())
+        {
+            ladder.Add(new MediaVariant(PublicUrl(VariantPath(item.RelativePath, width)), width));
+        }
+
+        return ladder;
     }
 
     private static SKBitmap? Resize(SKBitmap source, int width, int height)
@@ -289,7 +419,12 @@ public class MediaService(
         db.Media.Remove(item);
         await db.SaveChangesAsync(ct);
 
-        foreach (var path in new[] { item.RelativePath, item.ThumbnailPath })
+        // The variants are derived names rather than stored ones, so they have to be listed
+        // here as well or a delete leaves them behind.
+        var paths = new[] { item.RelativePath, item.ThumbnailPath }
+            .Concat(item.VariantWidths.Select(w => VariantPath(item.RelativePath, w)));
+
+        foreach (var path in paths)
         {
             if (string.IsNullOrEmpty(path)) continue;
 

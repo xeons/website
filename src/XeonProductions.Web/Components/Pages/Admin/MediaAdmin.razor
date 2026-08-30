@@ -14,13 +14,33 @@
             <h2>Upload</h2>
             <InputFile OnChange="UploadAsync" multiple accept="image/*,.pdf,.zip,.txt,.json,.xml,.csv" />
             <span class="field-hint">
-                Images are downscaled past 2000px wide and get a WebP thumbnail.
-                Up to 25 MB per file.
+                Images are downscaled past 2000px wide and written again as WebP at several
+                widths, so a browser can take the size it needs. Up to 25 MB per file.
             </span>
 
             @if (_uploading)
             {
                 <p class="row-sub" style="margin-top:10px">Uploading @_uploadedCount of @_uploadTotal...</p>
+            }
+        </div>
+
+        <div class="admin-card">
+            <h2>Image sizes</h2>
+            <span class="field-hint">
+                Anything uploaded before the WebP copies existed is still served at one size.
+                This writes the missing ones and leaves everything else alone, so it is safe to
+                run more than once.
+            </span>
+
+            <div style="margin-top:10px">
+                <button class="btn btn-secondary" @onclick="RebuildVariantsAsync" disabled="@_rebuilding">
+                    @(_rebuilding ? "Working..." : "Generate missing sizes")
+                </button>
+            </div>
+
+            @if (_rebuildMessage is not null)
+            {
+                <p class="row-sub" style="margin-top:10px">@_rebuildMessage</p>
             }
         </div>
 
@@ -218,6 +238,32 @@
 
         _uploading = false;
         await LoadAsync(reset: true);
+    }
+
+    private bool _rebuilding;
+    private string? _rebuildMessage;
+
+    private async Task RebuildVariantsAsync()
+    {
+        _rebuilding = true;
+        _rebuildMessage = null;
+
+        try
+        {
+            var rebuilt = await Media.RebuildVariantsAsync();
+
+            _rebuildMessage = rebuilt == 0
+                ? "Every image already has its sizes."
+                : $"Wrote the missing sizes for {rebuilt} image{(rebuilt == 1 ? "" : "s")}.";
+        }
+        catch (Exception ex)
+        {
+            _rebuildMessage = $"Could not finish: {ex.Message}";
+        }
+        finally
+        {
+            _rebuilding = false;
+        }
     }
 
     private async Task SaveDetailsAsync()

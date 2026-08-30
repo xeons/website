@@ -13,6 +13,12 @@ public interface IMediaService
     /// that does not match anything in the library.
     /// </summary>
     Task<MediaVariants?> ResolveByUrlAsync(string? url, CancellationToken ct = default);
+    /// <summary>
+    /// Writes the WebP copies for images stored before they were generated, or before the
+    /// configured widths changed. Returns how many images were rebuilt.
+    /// </summary>
+    Task<int> RebuildVariantsAsync(CancellationToken ct = default);
+
     string PublicUrl(string? relativePath);
     string ThumbnailUrl(MediaItem item);
 }

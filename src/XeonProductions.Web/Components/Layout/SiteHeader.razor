@@ -12,17 +12,33 @@
                         is not possible: the theme is a browser preference, and the page is
                         cached and served identically to everyone.
                     *@
-                    <img class="logo-light" src="@Settings.LogoUrl" alt="@Settings.SiteTitle"
-                         srcset="@_lightSrcSet" sizes="@LogoSizes"
-                         width="@_light?.Width" height="@_light?.Height"
-                         decoding="async" />
+                    @*
+                        The WebP copies are offered through a source rather than in the img's
+                        own srcset. A srcset holding both formats gives a browser that cannot
+                        read WebP no way to decline one; a source it does not understand is
+                        skipped, and the img beneath is what it takes.
+                    *@
+                    <picture>
+                        @if (_lightWebp is not null)
+                        {
+                            <source type="image/webp" srcset="@_lightWebp" sizes="@LogoSizes" />
+                        }
+                        <img class="logo-light" src="@Settings.LogoUrl" alt="@Settings.SiteTitle"
+                             width="@_light?.Width" height="@_light?.Height"
+                             decoding="async" />
+                    </picture>
 
                     @if (!string.IsNullOrWhiteSpace(Settings.LogoUrlDark))
                     {
-                        <img class="logo-dark" src="@Settings.LogoUrlDark" alt="@Settings.SiteTitle"
-                             srcset="@_darkSrcSet" sizes="@LogoSizes"
-                             width="@_dark?.Width" height="@_dark?.Height"
-                             decoding="async" />
+                        <picture>
+                            @if (_darkWebp is not null)
+                            {
+                                <source type="image/webp" srcset="@_darkWebp" sizes="@LogoSizes" />
+                            }
+                            <img class="logo-dark" src="@Settings.LogoUrlDark" alt="@Settings.SiteTitle"
+                                 width="@_dark?.Width" height="@_dark?.Height"
+                                 decoding="async" />
+                        </picture>
                     }
                 </a>
 
@@ -123,8 +139,8 @@
 
     private MediaVariants? _light;
     private MediaVariants? _dark;
-    private string? _lightSrcSet;
-    private string? _darkSrcSet;
+    private string? _lightWebp;
+    private string? _darkWebp;
 
     private bool HasLogo => !string.IsNullOrWhiteSpace(Settings.LogoUrl);
 
@@ -170,23 +186,20 @@
         _light = await Media.ResolveByUrlAsync(Settings.LogoUrl);
         _dark = await Media.ResolveByUrlAsync(Settings.LogoUrlDark);
 
-        _lightSrcSet = BuildSrcSet(_light);
-        _darkSrcSet = BuildSrcSet(_dark);
+        _lightWebp = BuildSrcSet(_light);
+        _darkWebp = BuildSrcSet(_dark);
     }
 
     /// <summary>
-    /// Offers the small WebP alongside the original. A logo is often uploaded at full
-    /// resolution and then drawn a few hundred pixels wide, so without this every visitor
-    /// downloads far more image than the header can use.
+    /// The WebP copies, smallest first, for the browser to choose between. Null when an image
+    /// has none, which is the case for anything stored before they were generated; the img
+    /// beneath then serves the original on its own.
     /// </summary>
     private static string? BuildSrcSet(MediaVariants? variants)
     {
-        if (variants?.ThumbnailUrl is null || variants.Width is not > 0) return null;
+        if (variants is null || variants.Webp.Count == 0) return null;
 
-        // Nothing to choose between if the original is no larger than the thumbnail.
-        if (variants.Width <= variants.ThumbnailWidth) return null;
-
-        return $"{variants.ThumbnailUrl} {variants.ThumbnailWidth}w, {variants.Url} {variants.Width}w";
+        return string.Join(", ", variants.Webp.Select(v => $"{v.Url} {v.Width}w"));
     }
 
     private bool IsCurrent(MenuItem item)

@@ -9,4 +9,5 @@ public record MediaVariants(
     int? Width,
     int? Height,
     string? ThumbnailUrl,
-    int ThumbnailWidth);
+    int ThumbnailWidth,
+    IReadOnlyList<MediaVariant> Webp);
